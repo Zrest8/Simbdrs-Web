@@ -1,0 +1,10 @@
+# Pengaturan Claude Code di komputer ini (bukan bagian aplikasi)
+.claude/
+
+# File sementara Windows / Office / editor
+Thumbs.db
+desktop.ini
+~$*
+*.tmp
+.vscode/
+.idea/
