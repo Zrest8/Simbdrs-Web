@@ -22,18 +22,19 @@ function badge_status_permintaan(string $status): string
 
 /**
  * Ambil satu permintaan lengkap + cek hak akses BR-11.
- * Mengembalikan null bila tidak ada ATAU bila pengguna RUANGAN membuka permintaan ruangan lain.
+ * Mengembalikan null bila tidak ada ATAU bukan data milik pengguna (perawat ruangan lain / dokter lain).
  */
 function ambil_permintaan(PDO $pdo, int $id, array $saya, bool $kunci = false): ?array
 {
     $stmt = $pdo->prepare(
         "SELECT p.*, ps.no_rm, ps.nama_pasien, ps.gol_darah, ps.rhesus, ps.tgl_lahir, ps.jenis_kelamin,
-                r.nama_ruangan, d.nama_dokter, d.spesialis, c.kode, c.nama_komponen,
+                r.nama_ruangan, dk.nama AS nama_dokter, d.spesialis, c.kode, c.nama_komponen,
                 pg.nama AS nama_peminta
          FROM permintaan_darah p
          JOIN pasien ps        ON ps.id_pasien  = p.id_pasien
          JOIN ruangan r        ON r.id_ruangan  = p.id_ruangan
          JOIN dokter d         ON d.id_dokter   = p.id_dokter
+         JOIN pengguna dk      ON dk.id_pengguna = d.id_pengguna
          JOIN komponen_darah c ON c.id_komponen = p.id_komponen
          JOIN pengguna pg      ON pg.id_pengguna = p.id_peminta
          WHERE p.id_permintaan = ?" . ($kunci ? ' FOR UPDATE' : '')
@@ -43,7 +44,7 @@ function ambil_permintaan(PDO $pdo, int $id, array $saya, bool $kunci = false): 
     if (!$p) {
         return null;
     }
-    if ($saya['role'] === 'RUANGAN' && (int) $p['id_ruangan'] !== (int) $saya['id_ruangan']) {
+    if (!milik_saya($saya, $p)) {
         return null;   // BR-11: perlakukan seperti tidak ada
     }
     return $p;

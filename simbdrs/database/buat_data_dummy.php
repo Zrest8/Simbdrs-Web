@@ -27,17 +27,18 @@ $ruangan = [
     'IGD' => 'igd', 'ICU' => 'icu', 'Ruang Bedah' => 'bedah', 'Ruang Penyakit Dalam' => 'interna', 'Ruang Anak' => 'anak',
 ];
 $akun_baru = [
-    ['Perawat ICU', 'icu', 'icu12345', 'ICU'],
-    ['Perawat Ruang Bedah', 'bedah', 'bedah123', 'Ruang Bedah'],
-    ['Perawat Penyakit Dalam', 'interna', 'interna123', 'Ruang Penyakit Dalam'],
-    ['Perawat Ruang Anak', 'anak', 'anak1234', 'Ruang Anak'],
+    ['Ns. Dimas Prasetyo', 'icu', 'icu12345', 'ICU'],
+    ['Ns. Wulan Sari', 'bedah', 'bedah123', 'Ruang Bedah'],
+    ['Ns. Fajar Ramadhan', 'interna', 'interna123', 'Ruang Penyakit Dalam'],
+    ['Ns. Intan Permatasari', 'anak', 'anak1234', 'Ruang Anak'],
     ['Petugas BDRS Sore', 'petugas2', 'petugas234', null],
 ];
+// [nama, spesialis, username] — setiap dokter punya akun login (role DOKTER), password: dokter123
 $dokter = [
-    ['dr. Andika Pratama, Sp.PD', 'Penyakit Dalam'], ['dr. Ratna Kusumawati, Sp.B', 'Bedah'],
-    ['dr. Hendra Wijaya, Sp.An', 'Anestesi'], ['dr. Melati Anggraini, Sp.A', 'Anak'],
-    ['dr. Yusuf Hakim, Sp.EM', 'Emergensi'], ['dr. Sari Puspitasari, Sp.OG', 'Obstetri & Ginekologi'],
-    ['dr. Bambang Setiadi', 'Umum'],
+    ['dr. Andika Pratama, Sp.PD', 'Penyakit Dalam', 'dr.andika'], ['dr. Ratna Kusumawati, Sp.B', 'Bedah', 'dr.ratna'],
+    ['dr. Hendra Wijaya, Sp.An', 'Anestesi', 'dr.hendra'], ['dr. Melati Anggraini, Sp.A', 'Anak', 'dr.melati'],
+    ['dr. Yusuf Hakim, Sp.EM', 'Emergensi', 'dr.yusuf'], ['dr. Sari Puspitasari, Sp.OG', 'Obstetri & Ginekologi', 'dr.sari'],
+    ['dr. Bambang Setiadi', 'Umum', 'dr.bambang'],
 ];
 $dokter_ruang = ['IGD' => [4, 6, 1], 'ICU' => [2, 0], 'Ruang Bedah' => [1, 2], 'Ruang Penyakit Dalam' => [0], 'Ruang Anak' => [3]];
 $udd = [
@@ -169,7 +170,7 @@ for ($d = -$HARI + 1; $d <= 0; $d++) {
         $cito = mt_rand(1, 100) <= ($ruang === 'IGD' ? 40 : 12);
         $dk = $dokter_ruang[$ruang][mt_rand(0, count($dokter_ruang[$ruang]) - 1)];
         $pm = ['key' => count($permintaan), 'no' => $no_pmt, 'rm' => $p['rm'], 'ruang' => $ruang, 'peminta' => $ruangan[$ruang],
-               'dokter' => $dokter[$dk][0], 'kode' => $kode, 'jumlah' => $jumlah, 'cito' => $cito,
+               'dokter' => $dokter[$dk][2], 'kode' => $kode, 'jumlah' => $jumlah, 'cito' => $cito,
                'diag' => $diagnosis[$kode][mt_rand(0, count($diagnosis[$kode]) - 1)], 'd' => $d, 'm' => $mundur, 'status' => 'MENUNGGU'];
 
         // skenario hari ini: sebagian dibiarkan di tahap tertentu agar halaman kerja terisi
@@ -252,15 +253,18 @@ $hdr = <<<SQL
 --
 -- Isi: simulasi {$HARI} hari operasional BDRS sampai HARI IMPOR. Semua tanggal
 -- ditulis relatif (NOW()/CURDATE()), jadi data selalu tampak terbaru.
---   • 4 ruangan tambahan + akun perawatnya, 7 dokter, 3 UDD, 42 pasien
+--   • 4 ruangan tambahan + akun perawatnya, 7 dokter (masing-masing punya
+--     akun login), 3 UDD, 42 pasien
 --   • penerimaan rutin, permintaan harian (FEFO, uji silang), transfusi,
 --     pemusnahan, pengembalian, stok minimal, log aktivitas
 --   • keadaan "hari ini": ada permintaan MENUNGGU, DIPROSES, kantong DIPESAN,
 --     kantong di ruangan (DIKELUARKAN), dan kantong kedaluwarsa yang belum ditindak
 --
 -- Akun tambahan (HANYA untuk demo lokal):
---   icu / icu12345        bedah / bedah123       interna / interna123
---   anak / anak1234       petugas2 / petugas234
+--   Perawat : icu / icu12345   bedah / bedah123   interna / interna123   anak / anak1234
+--   Petugas : petugas2 / petugas234
+--   Dokter  : dr.andika, dr.ratna, dr.hendra, dr.melati, dr.yusuf, dr.sari,
+--             dr.bambang — semuanya password dokter123
 --
 -- File ini DIBUAT OTOMATIS oleh skrip generator (mt_srand tetap) agar seluruh
 -- angka konsisten dengan aturan bisnis BR-01 s.d. BR-14.
@@ -272,16 +276,18 @@ START TRANSACTION;
 SQL;
 $out[] = $hdr;
 
-$out[] = "-- ---------- Ruangan & akun ruangan ----------";
+$out[] = "-- ---------- Ruangan & akun perawat ----------";
 $out[] = "INSERT INTO ruangan (nama_ruangan) VALUES " . implode(', ', array_map(fn($r) => "(" . $q($r) . ")", array_slice(array_keys($ruangan), 1))) . ";";
 $rows = [];
 foreach ($akun_baru as [$nama, $user, $pw, $ru]) {
-    $rows[] = "(" . $q($nama) . ", " . $q($user) . ", " . $q(password_hash($pw, PASSWORD_DEFAULT)) . ", " . $q($ru ? 'RUANGAN' : 'PETUGAS') . ", " . ($ru ? "(SELECT id_ruangan FROM ruangan r WHERE r.nama_ruangan = " . $q($ru) . ")" : 'NULL') . ")";
+    $rows[] = "(" . $q($nama) . ", " . $q($user) . ", " . $q(password_hash($pw, PASSWORD_DEFAULT)) . ", " . $q($ru ? 'PERAWAT' : 'PETUGAS') . ", " . ($ru ? "(SELECT id_ruangan FROM ruangan r WHERE r.nama_ruangan = " . $q($ru) . ")" : 'NULL') . ")";
 }
 $out[] = "INSERT INTO pengguna (nama, username, password_hash, role, id_ruangan) VALUES\n" . implode(",\n", $rows) . ";\n";
 
-$out[] = "-- ---------- Dokter, UDD, pasien ----------";
-$out[] = "INSERT INTO dokter (nama_dokter, spesialis) VALUES\n" . implode(",\n", array_map(fn($x) => "(" . $q($x[0]) . ", " . $q($x[1]) . ")", $dokter)) . ";";
+$out[] = "-- ---------- Dokter (akun DOKTER dulu, lalu datanya), UDD, pasien ----------";
+$pw_dokter = password_hash('dokter123', PASSWORD_DEFAULT);
+$out[] = "INSERT INTO pengguna (nama, username, password_hash, role) VALUES\n" . implode(",\n", array_map(fn($x) => "(" . $q($x[0]) . ", " . $q($x[2]) . ", " . $q($pw_dokter) . ", 'DOKTER')", $dokter)) . ";";
+$out[] = "INSERT INTO dokter (id_pengguna, spesialis) VALUES\n" . implode(",\n", array_map(fn($x) => "(" . $idu($x[2]) . ", " . $q($x[1]) . ")", $dokter)) . ";";
 $out[] = "INSERT INTO udd_asal (nama_udd, alamat, telepon) VALUES\n" . implode(",\n", array_map(fn($x) => "(" . $q($x[0]) . ", " . $q($x[1]) . ", " . $q($x[2]) . ")", $udd)) . ";";
 $out[] = "INSERT INTO pasien (no_rm, nama_pasien, tgl_lahir, jenis_kelamin, gol_darah, rhesus) VALUES\n" . implode(",\n", array_map(fn($p) => "(" . $q($p['rm']) . ", " . $q($p['nama']) . ", " . $q($p['lahir']) . ", " . $q($p['jk']) . ", " . $q($p['gol']) . ", " . $q($p['rh']) . ")", $pasien)) . ";\n";
 
@@ -310,7 +316,7 @@ foreach (array_chunk($rows, 200) as $c) {
 $out[] = "\n-- ---------- Permintaan darah ----------";
 $rows = [];
 foreach ($permintaan as $p) {
-    $rows[] = "(" . $no_pmt_sql($p['no']) . ", (SELECT id_pasien FROM pasien WHERE no_rm = " . $q($p['rm']) . "), (SELECT id_ruangan FROM ruangan WHERE nama_ruangan = " . $q($p['ruang']) . "), " . $idu($p['peminta']) . ", (SELECT id_dokter FROM dokter WHERE nama_dokter = " . $q($p['dokter']) . "), (SELECT id_komponen FROM komponen_darah WHERE kode = '{$p['kode']}'), {$p['jumlah']}, '" . ($p['cito'] ? 'CITO' : 'BIASA') . "', " . $q($p['diag']) . ", " . $waktu($p['d'], $p['m']) . ", '{$p['status']}')";
+    $rows[] = "(" . $no_pmt_sql($p['no']) . ", (SELECT id_pasien FROM pasien WHERE no_rm = " . $q($p['rm']) . "), (SELECT id_ruangan FROM ruangan WHERE nama_ruangan = " . $q($p['ruang']) . "), " . $idu($p['peminta']) . ", (SELECT d.id_dokter FROM dokter d JOIN pengguna u ON u.id_pengguna = d.id_pengguna WHERE u.username = " . $q($p['dokter']) . "), (SELECT id_komponen FROM komponen_darah WHERE kode = '{$p['kode']}'), {$p['jumlah']}, '" . ($p['cito'] ? 'CITO' : 'BIASA') . "', " . $q($p['diag']) . ", " . $waktu($p['d'], $p['m']) . ", '{$p['status']}')";
     $log[] = [$waktu($p['d'], $p['m']), $p['peminta'], 'TAMBAH', 'permintaan_darah', 'PMT' . $p['key'], "Permintaan {$p['jumlah']} kantong {$p['kode']} untuk {$p['rm']}" . ($p['cito'] ? ' (CITO)' : '')];
 }
 foreach (array_chunk($rows, 150) as $c) {

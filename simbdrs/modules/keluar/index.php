@@ -8,7 +8,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-$saya = wajib_login(['PETUGAS']);
+$saya = wajib_hak('keluar');
 
 $judul = 'Pengembalian & Pemusnahan';
 $menu_aktif = 'keluar';

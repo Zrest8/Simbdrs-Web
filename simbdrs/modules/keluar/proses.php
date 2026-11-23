@@ -11,7 +11,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-$saya = wajib_login(['PETUGAS']);
+$saya = wajib_hak('keluar', 'tambah');
 
 $judul = 'Tindak Kantong';
 $menu_aktif = 'keluar';

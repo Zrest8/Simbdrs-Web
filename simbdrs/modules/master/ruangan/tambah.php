@@ -5,7 +5,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('ruangan', 'tambah');
 
 $judul = 'Tambah Ruangan';
 $menu_aktif = 'ruangan';

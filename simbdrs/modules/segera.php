@@ -3,7 +3,7 @@
 // Halaman "sedang dibangun" untuk menu yang modulnya belum dibuat.
 // Dibuka dari sidebar: modules/segera.php?m=<kunci menu>
 // Tidak menjalankan query apa pun; hanya membaca daftar menu (includes/menu.php).
-// Hak akses tetap mengikuti peran yang tertulis di daftar menu.
+// Hak akses tetap mengikuti tabel hak_akses.
 // =====================================================================
 
 require __DIR__ . '/../auth/cek_akses.php';
@@ -22,7 +22,7 @@ if ($modul === null) {
     redirect('modules/dashboard/index.php');
 }
 
-wajib_login($modul['peran']);
+wajib_hak($modul['kunci']);
 
 $judul = $modul['label'];
 $menu_aktif = $modul['kunci'];

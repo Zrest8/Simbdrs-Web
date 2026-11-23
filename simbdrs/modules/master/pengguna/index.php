@@ -6,14 +6,17 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-$saya = wajib_login(['ADMIN']);
+$saya = wajib_hak('pengguna', 'lihat');
+$boleh_tambah = hak('pengguna', 'tambah');
+$boleh_ubah   = hak('pengguna', 'ubah');
+$boleh_hapus  = hak('pengguna', 'hapus');
 
 $judul = 'Data Pengguna';
 $menu_aktif = 'pengguna';
 
 $cari  = trim($_GET['cari'] ?? '');
 $peran = $_GET['peran'] ?? '';
-$daftar_peran = ['ADMIN', 'PETUGAS', 'RUANGAN', 'KEPALA'];
+$daftar_peran = ['ADMIN', 'PETUGAS', 'KEPALA', 'DOKTER', 'PERAWAT'];
 
 $sql = "SELECT p.id_pengguna, p.nama, p.username, p.role, p.aktif, p.created_at, r.nama_ruangan,
                (SELECT MAX(l.waktu) FROM log_aktivitas l
@@ -31,13 +34,13 @@ if (in_array($peran, $daftar_peran, true)) {
     $sql .= " AND p.role = ?";
     $param[] = $peran;
 }
-$sql .= " ORDER BY p.aktif DESC, FIELD(p.role, 'ADMIN', 'KEPALA', 'PETUGAS', 'RUANGAN'), p.nama";
+$sql .= " ORDER BY p.aktif DESC, FIELD(p.role, 'ADMIN', 'KEPALA', 'PETUGAS', 'DOKTER', 'PERAWAT'), p.nama";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($param);
 $daftar = $stmt->fetchAll();
 
-$warna_peran = ['ADMIN' => 'text-bg-dark', 'KEPALA' => 'text-bg-primary', 'PETUGAS' => 'text-bg-danger', 'RUANGAN' => 'text-bg-info'];
+$warna_peran = ['ADMIN' => 'text-bg-dark', 'KEPALA' => 'text-bg-warning', 'PETUGAS' => 'text-bg-primary', 'DOKTER' => 'text-bg-info', 'PERAWAT' => 'text-bg-secondary'];
 
 require __DIR__ . '/../../../includes/header.php';
 ?>
@@ -55,7 +58,7 @@ require __DIR__ . '/../../../includes/header.php';
             <input class="form-control form-control-sm" style="width:auto" name="cari" value="<?= e($cari) ?>" placeholder="Cari nama / username..." aria-label="Cari pengguna">
             <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
         </form>
-        <a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Tambah</a>
+        <?php if ($boleh_tambah): ?><a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Tambah</a><?php endif; ?>
     </div>
 
     <?php if (!$daftar): ?>
@@ -75,16 +78,18 @@ require __DIR__ . '/../../../includes/header.php';
                     <td><small><?= $r['login_terakhir'] ? e(tgl_indo($r['login_terakhir'], true)) : '<span class="text-secondary">belum pernah</span>' ?></small></td>
                     <td><?= $r['aktif'] ? '<span class="badge text-bg-success">Aktif</span>' : '<span class="badge text-bg-secondary">Nonaktif</span>' ?></td>
                     <td class="text-end text-nowrap">
-                        <a class="btn btn-sm btn-outline-secondary" href="edit.php?id=<?= (int) $r['id_pengguna'] ?>"><i class="bi bi-pencil"></i> Edit</a>
+                        <?php if ($boleh_ubah): ?><a class="btn btn-sm btn-outline-secondary" href="edit.php?id=<?= (int) $r['id_pengguna'] ?>"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
+                        <?php if ($boleh_hapus): ?>
                         <?php if ($sendiri): ?>
-                            <button class="btn btn-sm btn-outline-danger" type="button" disabled title="Tidak bisa menghapus akun sendiri"><i class="bi bi-trash"></i> Hapus</button>
+                            <button class="btn btn-sm btn-ikon btn-hapus" type="button" disabled aria-label="Hapus (akun sendiri)" title="Tidak bisa menghapus akun sendiri"><i class="bi bi-trash" aria-hidden="true"></i></button>
                         <?php else: ?>
                         <form class="d-inline" method="post" action="hapus.php"
                               onsubmit="return confirm('Hapus akun <?= e(addslashes($r['username'])) ?>? Jika punya jejak aktivitas, akun hanya akan dinonaktifkan.');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="id" value="<?= (int) $r['id_pengguna'] ?>">
-                            <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Hapus</button>
+                            <button class="btn btn-sm btn-ikon btn-hapus" type="submit" aria-label="Hapus" title="Hapus"><i class="bi bi-trash" aria-hidden="true"></i></button>
                         </form>
+                        <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>

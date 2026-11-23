@@ -6,7 +6,7 @@
 
 require __DIR__ . '/../../../auth/cek_akses.php';
 require __DIR__ . '/_validasi.php';
-wajib_login(['ADMIN']);
+wajib_hak('udd', 'ubah');
 
 $judul = 'Edit UDD Asal';
 $menu_aktif = 'udd';

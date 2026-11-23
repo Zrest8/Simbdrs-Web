@@ -6,7 +6,7 @@
 
 require __DIR__ . '/../../../auth/cek_akses.php';
 require __DIR__ . '/_validasi.php';
-wajib_login(['ADMIN']);
+wajib_hak('pasien', 'ubah');
 
 $judul = 'Edit Pasien';
 $menu_aktif = 'pasien';

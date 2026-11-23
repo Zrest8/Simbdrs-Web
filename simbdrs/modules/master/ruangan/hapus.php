@@ -8,7 +8,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('ruangan', 'hapus');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {   // hapus hanya lewat tombol (POST)
     header('Location: index.php');

@@ -14,7 +14,7 @@
 
 require __DIR__ . '/../../auth/cek_akses.php';
 require __DIR__ . '/_fungsi.php';
-$saya = wajib_login(['PETUGAS', 'RUANGAN']);
+$saya = wajib_hak('permintaan');
 
 $judul = 'Detail Permintaan';
 $menu_aktif = 'permintaan';
@@ -28,7 +28,7 @@ if (!$p) {
 }
 
 $aktif      = in_array($p['status'], STATUS_BISA_DIUBAH, true);   // termasuk TERPENUHI (belum diserahkan)
-$petugas    = $saya['role'] === 'PETUGAS';
+$petugas    = hak('permintaan', 'ubah');   // boleh memproses (uji silang, pesan/lepas kantong)
 
 // Kantong yang terikat ke permintaan ini (sudah lolos uji silang)
 $stmt = $pdo->prepare(
@@ -111,7 +111,7 @@ require __DIR__ . '/../../includes/header.php';
                     <dt class="text-secondary fw-normal">Diminta oleh</dt><dd class="mb-0"><?= e($p['nama_peminta']) ?> · <?= e(tgl_indo($p['tgl_permintaan'], true)) ?></dd>
                 </dl>
             </div>
-            <?php if ($boleh_batal && ($petugas || $saya['role'] === 'RUANGAN')): ?>
+            <?php if ($boleh_batal && hak('permintaan', 'hapus')): ?>
             <div class="panel-body border-top">
                 <form method="post" action="aksi.php" onsubmit="return confirm('Batalkan permintaan ini? Kantong yang sudah dipesan akan dikembalikan ke stok.');">
                     <?= csrf_field() ?>

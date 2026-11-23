@@ -3,6 +3,8 @@
 // Variabel: $p (data form), $error, $ruangan (daftar), $mode_edit, $aktif, $akun_sendiri
 $mode_edit    = $mode_edit ?? false;
 $akun_sendiri = $akun_sendiri ?? false;
+$akun_dokter  = $akun_dokter ?? false;
+$kunci_peran  = $akun_sendiri || $akun_dokter;
 ?>
 <div class="row justify-content-center">
     <div class="col-lg-7">
@@ -15,6 +17,14 @@ $akun_sendiri = $akun_sendiri ?? false;
                     <div class="alert alert-info small d-flex gap-2 align-items-start py-2">
                         <i class="bi bi-person-check mt-1"></i>
                         <span>Ini akun Anda sendiri. Peran dan status aktif dikunci supaya Anda tidak terkunci keluar dari sistem.</span>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($akun_dokter): ?>
+                    <div class="alert alert-info small d-flex gap-2 align-items-start py-2">
+                        <i class="bi bi-person-badge mt-1"></i>
+                        <span>Ini akun dokter. Perannya dikunci; data spesialis dikelola di menu
+                            <a href="<?= url('modules/master/dokter/index.php') ?>">Dokter</a>.</span>
                     </div>
                 <?php endif; ?>
 
@@ -38,13 +48,14 @@ $akun_sendiri = $akun_sendiri ?? false;
 
                         <div class="col-sm-6">
                             <label class="form-label" for="role">Peran <span class="text-danger">*</span></label>
-                            <select class="form-select" id="role" name="role" <?= $akun_sendiri ? 'disabled' : '' ?> required>
+                            <select class="form-select" id="role" name="role" <?= $kunci_peran ? 'disabled' : '' ?> required>
                                 <option value="">— pilih peran —</option>
-                                <?php foreach (PERAN_VALID as $r): ?>
+                                <?php foreach ($akun_dokter ? ['DOKTER'] : PERAN_VALID as $r): ?>
                                     <option value="<?= $r ?>" <?= $p['role'] === $r ? 'selected' : '' ?>><?= e(nama_role($r)) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if ($akun_sendiri): ?><input type="hidden" name="role" value="<?= e($p['role']) ?>"><?php endif; ?>
+                            <?php if ($kunci_peran): ?><input type="hidden" name="role" value="<?= e($p['role']) ?>"><?php else: ?>
+                                <div class="form-text">Akun dokter dibuat lewat menu <a href="<?= url('modules/master/dokter/tambah.php') ?>">Dokter</a>.</div><?php endif; ?>
                         </div>
                         <div class="col-sm-6" id="grup-ruangan">
                             <label class="form-label" for="id_ruangan">Ruangan <span class="text-danger">*</span></label>
@@ -55,7 +66,7 @@ $akun_sendiri = $akun_sendiri ?? false;
                                         <?= e($r['nama_ruangan']) ?><?= $r['aktif'] ? '' : ' (nonaktif)' ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="form-text">Akun Ruangan hanya melihat permintaan dari ruangan ini (BR-11).</div>
+                            <div class="form-text">Perawat hanya melihat permintaan dari ruangan ini (BR-11).</div>
                         </div>
 
                         <div class="col-12"><hr class="my-1"></div>
@@ -89,13 +100,13 @@ $akun_sendiri = $akun_sendiri ?? false;
     </div>
 </div>
 <?php
-// Pilihan ruangan hanya ditampilkan untuk peran RUANGAN
+// Pilihan ruangan hanya ditampilkan untuk peran PERAWAT
 $script_tambahan = <<<'JS'
 <script>
 (function () {
     const role = document.getElementById('role');
     const grup = document.getElementById('grup-ruangan');
-    const atur = () => { grup.style.display = role.value === 'RUANGAN' ? '' : 'none'; };
+    const atur = () => { grup.style.display = role.value === 'PERAWAT' ? '' : 'none'; };
     role.addEventListener('change', atur);
     atur();
 })();

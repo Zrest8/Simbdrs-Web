@@ -1,43 +1,54 @@
 <?php
 // =====================================================================
-// Master Dokter — TAMBAH
-// Tabel: dokter (SELECT cek duplikat, INSERT), log_aktivitas (INSERT)
+// Master Dokter — TAMBAH (dokter + akun loginnya sekaligus)
+// Tabel: pengguna (INSERT role DOKTER), dokter (INSERT), log_aktivitas (INSERT)
+//
+// Satu dokter = satu akun (dokter.id_pengguna NOT NULL UNIQUE). Keduanya
+// disimpan dalam SATU transaksi: kalau salah satu gagal, dua-duanya batal.
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+require __DIR__ . '/../pengguna/_validasi.php';   // aturan username & password yang sama
+wajib_hak('dokter', 'tambah');
 
 $judul = 'Tambah Dokter';
 $menu_aktif = 'dokter';
 
-$nama = '';
-$spesialis = '';
+$f = ['nama' => '', 'spesialis' => '', 'username' => ''];
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     cek_csrf();
-    $nama      = trim($_POST['nama_dokter'] ?? '');
-    $spesialis = trim($_POST['spesialis'] ?? '');
+    $akun = baca_form_pengguna();          // nama, username, password, password2
+    $akun['role'] = 'DOKTER';
+    $f = ['nama' => $akun['nama'], 'spesialis' => trim($_POST['spesialis'] ?? ''), 'username' => $akun['username']];
 
-    if ($nama === '') {
-        $error = 'Nama dokter wajib diisi.';
-    } elseif (mb_strlen($nama) > 100 || mb_strlen($spesialis) > 100) {
-        $error = 'Nama dan spesialis maksimal 100 karakter.';
-    } else {
-        // Kolom nama_dokter tidak UNIQUE (dua dokter bisa bernama sama),
-        // jadi duplikat dicek di sini: nama + spesialis yang persis sama ditolak.
-        $cek = $pdo->prepare("SELECT COUNT(*) FROM dokter WHERE nama_dokter = ? AND COALESCE(spesialis, '') = ?");
-        $cek->execute([$nama, $spesialis]);
+    $error = validasi_pengguna($akun, true, ['DOKTER']);
+    if ($error === '' && mb_strlen($f['spesialis']) > 100) {
+        $error = 'Spesialis maksimal 100 karakter.';
+    }
+    if ($error === '') {
+        $cek = $pdo->prepare("SELECT COUNT(*) FROM pengguna WHERE username = ?");
+        $cek->execute([$akun['username']]);
         if ($cek->fetchColumn() > 0) {
-            $error = "Dokter \"$nama\" dengan spesialis yang sama sudah ada.";
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO dokter (nama_dokter, spesialis) VALUES (?, ?)");
-            $stmt->execute([$nama, $spesialis !== '' ? $spesialis : null]);
-            catat_log($pdo, 'TAMBAH', 'dokter', (int) $pdo->lastInsertId(), "Tambah dokter: $nama");
-            set_flash('success', "Dokter \"$nama\" berhasil ditambahkan.");
-            header('Location: index.php');
-            exit;
+            $error = "Username \"{$akun['username']}\" sudah dipakai.";
         }
+    }
+
+    if ($error === '') {
+        $pdo->beginTransaction();
+        $pdo->prepare("INSERT INTO pengguna (nama, username, password_hash, role) VALUES (?, ?, ?, 'DOKTER')")
+            ->execute([$akun['nama'], $akun['username'], password_hash($akun['password'], PASSWORD_DEFAULT)]);
+        $id_pengguna = (int) $pdo->lastInsertId();
+        $pdo->prepare("INSERT INTO dokter (id_pengguna, spesialis) VALUES (?, ?)")
+            ->execute([$id_pengguna, $f['spesialis'] !== '' ? $f['spesialis'] : null]);
+        $id_dokter = (int) $pdo->lastInsertId();
+        catat_log($pdo, 'TAMBAH', 'dokter', $id_dokter, "Tambah dokter: {$akun['nama']} (akun {$akun['username']})");
+        $pdo->commit();
+
+        set_flash('success', "Dokter \"{$akun['nama']}\" ditambahkan. Ia bisa login dengan username \"{$akun['username']}\".");
+        header('Location: index.php');
+        exit;
     }
 }
 

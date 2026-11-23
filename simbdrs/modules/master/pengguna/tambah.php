@@ -7,7 +7,7 @@
 
 require __DIR__ . '/../../../auth/cek_akses.php';
 require __DIR__ . '/_validasi.php';
-wajib_login(['ADMIN']);
+wajib_hak('pengguna', 'tambah');
 
 $judul = 'Tambah Pengguna';
 $menu_aktif = 'pengguna';
@@ -20,13 +20,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $p = baca_form_pengguna();
     $error = validasi_pengguna($p, true);
 
-    if ($error === '' && $p['role'] === 'RUANGAN' && !ruangan_boleh($pdo, $p['id_ruangan'])) {
+    if ($error === '' && $p['role'] === 'PERAWAT' && !ruangan_boleh($pdo, $p['id_ruangan'])) {
         $error = 'Ruangan yang dipilih tidak ditemukan atau sudah nonaktif.';
     }
 
     if ($error === '') {
-        // id_ruangan hanya diisi untuk peran RUANGAN; peran lain NULL
-        $id_ruangan = $p['role'] === 'RUANGAN' ? $p['id_ruangan'] : null;
+        // id_ruangan hanya diisi untuk peran PERAWAT; peran lain NULL
+        $id_ruangan = $p['role'] === 'PERAWAT' ? $p['id_ruangan'] : null;
         try {
             $stmt = $pdo->prepare(
                 "INSERT INTO pengguna (nama, username, password_hash, role, id_ruangan) VALUES (?, ?, ?, ?, ?)"

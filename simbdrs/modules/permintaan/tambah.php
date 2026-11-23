@@ -1,17 +1,18 @@
 <?php
 // =====================================================================
-// Permintaan Darah — BUAT PERMINTAAN (F-05) · hanya peran RUANGAN
-// Tabel: pasien, dokter, komponen_darah (SELECT pilihan)
+// Permintaan Darah — BUAT PERMINTAAN (F-05) · peran dengan hak "tambah" di menu Permintaan
+// Tabel: pasien, dokter + pengguna, ruangan, komponen_darah (SELECT pilihan)
 //        permintaan_darah (INSERT, status MENUNGGU), log_aktivitas (INSERT)
 //
-//  BR-11  ruangan diambil dari akun yang login (tidak bisa dipilih)
+//  BR-11  ruangan diambil dari akun yang login (perawat); akun tanpa ruangan memilih ruangan
 //  BR-13  pasien wajib sudah punya golongan darah + rhesus
 //  BR-14  dokter penanggung jawab wajib diisi
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
 require __DIR__ . '/_fungsi.php';
-$saya = wajib_login(['RUANGAN']);
+$saya = wajib_hak('permintaan', 'tambah');
+$ruang_tetap = $saya['id_ruangan'] ? (int) $saya['id_ruangan'] : 0;   // perawat: ruangannya sendiri
 
 $judul = 'Buat Permintaan Darah';
 $menu_aktif = 'permintaan';
@@ -21,15 +22,22 @@ const JUMLAH_MAKS = 20;   // batas wajar satu permintaan (bukan aturan medis)
 $pasien = $pdo->query(
     "SELECT id_pasien, no_rm, nama_pasien, gol_darah, rhesus FROM pasien WHERE aktif = 1 ORDER BY nama_pasien"
 )->fetchAll();
-$dokter = $pdo->query("SELECT id_dokter, nama_dokter, spesialis FROM dokter WHERE aktif = 1 ORDER BY nama_dokter")->fetchAll();
+// Dokter = akun ber-peran DOKTER yang masih aktif (nama diambil dari tabel pengguna)
+$dokter = $pdo->query(
+    "SELECT d.id_dokter, u.nama AS nama_dokter, d.spesialis
+     FROM dokter d JOIN pengguna u ON u.id_pengguna = d.id_pengguna
+     WHERE u.aktif = 1 ORDER BY u.nama"
+)->fetchAll();
+$ruangan = $pdo->query("SELECT id_ruangan, nama_ruangan FROM ruangan WHERE aktif = 1 ORDER BY nama_ruangan")->fetchAll();
 $komponen = $pdo->query("SELECT id_komponen, kode, nama_komponen FROM komponen_darah ORDER BY masa_simpan_hari, kode")->fetchAll();
 
-$f = ['id_pasien' => 0, 'id_dokter' => 0, 'id_komponen' => 0, 'jumlah_kantong' => '1', 'urgensi' => 'BIASA', 'diagnosis' => ''];
+$f = ['id_ruangan' => $ruang_tetap, 'id_pasien' => 0, 'id_dokter' => (int) ($saya['id_dokter'] ?? 0), 'id_komponen' => 0, 'jumlah_kantong' => '1', 'urgensi' => 'BIASA', 'diagnosis' => ''];
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     cek_csrf();
     $f = [
+        'id_ruangan'     => $ruang_tetap ?: (int) ($_POST['id_ruangan'] ?? 0),
         'id_pasien'      => (int) ($_POST['id_pasien'] ?? 0),
         'id_dokter'      => (int) ($_POST['id_dokter'] ?? 0),
         'id_komponen'    => (int) ($_POST['id_komponen'] ?? 0),
@@ -46,7 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_dokter_valid   = array_map('intval', array_column($dokter, 'id_dokter'));
     $id_komponen_valid = array_map('intval', array_column($komponen, 'id_komponen'));
 
-    if (!$ps) {
+    if (!in_array($f['id_ruangan'], array_map('intval', array_column($ruangan, 'id_ruangan')), true) && !$ruang_tetap) {
+        $error = 'Pilih ruangan perawatan pasien.';
+    } elseif (!$ps) {
         $error = 'Pilih pasien.';
     } elseif (!$ps['gol_darah'] || !$ps['rhesus']) {
         $error = "Golongan darah pasien {$ps['nama_pasien']} belum tercatat. Minta admin melengkapinya dulu (BR-13).";
@@ -74,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 );
                 $stmt->execute([
-                    $no, $f['id_pasien'], (int) $saya['id_ruangan'], (int) $saya['id_pengguna'], $f['id_dokter'],
+                    $no, $f['id_pasien'], $f['id_ruangan'], (int) $saya['id_pengguna'], $f['id_dokter'],
                     $f['id_komponen'], (int) $f['jumlah_kantong'], $f['urgensi'], $f['diagnosis'],
                 ]);
                 $id = (int) $pdo->lastInsertId();
@@ -101,7 +111,7 @@ require __DIR__ . '/../../includes/header.php';
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <section class="panel">
-            <div class="panel-head"><i class="bi bi-clipboard2-plus"></i><h2>Permintaan Darah — <?= e($saya['nama_ruangan'] ?? '') ?></h2></div>
+            <div class="panel-head"><i class="bi bi-clipboard2-plus"></i><h2>Permintaan Darah<?= $ruang_tetap ? ' — ' . e($saya['nama_ruangan'] ?? '') : '' ?></h2></div>
             <div class="panel-body">
                 <?php if ($error): ?>
                     <div class="alert alert-danger d-flex gap-2 align-items-center"><i class="bi bi-x-circle"></i><?= e($error) ?></div>
@@ -113,6 +123,18 @@ require __DIR__ . '/../../includes/header.php';
                 <form method="post" novalidate>
                     <?= csrf_field() ?>
                     <div class="row g-3">
+                        <?php if (!$ruang_tetap): ?>
+                        <div class="col-12">
+                            <label class="form-label" for="id_ruangan">Ruangan perawatan <span class="text-danger">*</span></label>
+                            <select class="form-select" id="id_ruangan" name="id_ruangan" required>
+                                <option value="0">— pilih ruangan —</option>
+                                <?php foreach ($ruangan as $r): ?>
+                                    <option value="<?= (int) $r['id_ruangan'] ?>" <?= $f['id_ruangan'] === (int) $r['id_ruangan'] ? 'selected' : '' ?>><?= e($r['nama_ruangan']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">Akun ini tidak terikat ke satu ruangan, jadi ruangan dipilih manual.</div>
+                        </div>
+                        <?php endif; ?>
                         <div class="col-12">
                             <label class="form-label" for="id_pasien">Pasien <span class="text-danger">*</span></label>
                             <select class="form-select" id="id_pasien" name="id_pasien" required>

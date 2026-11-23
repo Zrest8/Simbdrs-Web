@@ -6,7 +6,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-wajib_login(['PETUGAS']);
+wajib_hak('penerimaan');
 
 $judul = 'Penerimaan Kantong';
 $menu_aktif = 'penerimaan';
@@ -49,7 +49,7 @@ require __DIR__ . '/../../includes/header.php';
             <input class="form-control form-control-sm" name="cari" value="<?= e($cari) ?>" placeholder="No. dokumen / UDD / no. kantong..." aria-label="Cari penerimaan">
             <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
         </form>
-        <a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Terima Kiriman</a>
+        <?php if (hak('penerimaan', 'tambah')): ?><a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Terima Kiriman</a><?php endif; ?>
     </div>
 
     <?php if (!$daftar): ?>
@@ -67,8 +67,8 @@ require __DIR__ . '/../../includes/header.php';
                     <td><?= e($r['nama_udd']) ?></td>
                     <td><span class="fw-semibold"><?= (int) $r['jml_kantong'] ?> kantong</span><br><small class="text-secondary"><?= e($r['rincian'] ?? '') ?></small></td>
                     <td class="text-nowrap"><?= $r['suhu_terima'] !== null ? e(str_replace('.', ',', $r['suhu_terima'])) . ' °C' : '<span class="text-secondary">—</span>' ?></td>
-                    <td><small><?= e($r['nama_petugas']) ?></small></td>
-                    <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="detail.php?id=<?= (int) $r['id_penerimaan'] ?>"><i class="bi bi-eye"></i> Detail</a></td>
+                    <td class="text-nowrap"><small><?= e($r['nama_petugas']) ?></small></td>
+                    <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="detail.php?id=<?= (int) $r['id_penerimaan'] ?>">Detail</a></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

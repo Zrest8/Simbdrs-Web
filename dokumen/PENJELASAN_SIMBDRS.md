@@ -86,10 +86,12 @@ Angka-angka ini **disimpan di tabel `komponen_darah`**, bukan di kode, supaya bi
 |---|---|---|---|
 | **ADMIN** | Pengelola sistem | Kelola akun & data master, atur periode pemesanan, baca log aktivitas | Dashboard, Data Master (7 menu), Log Aktivitas |
 | **PETUGAS** | Petugas BDRS | Terima kantong, proses permintaan, uji silang, serahkan darah, kembalikan/musnahkan, lihat rekomendasi & laporan | Dashboard, Penerimaan, Stok, Permintaan, Transfusi, Pengembalian & Pemusnahan, Rekomendasi, Laporan |
-| **RUANGAN** | Dokter / perawat | Minta darah, catat mulai/selesai transfusi — **hanya untuk ruangannya** | Dashboard, Permintaan, Transfusi |
 | **KEPALA** | Kepala BDRS | Memantau (**hanya baca**) | Dashboard, Stok, Rekomendasi, Laporan |
+| **DOKTER** | Dokter penanggung jawab (setiap dokter punya akun) | Memantau permintaan & transfusi **pasien yang ia tangani** (hanya baca) | Dashboard Dokter, Permintaan, Transfusi |
+| **PERAWAT** | Perawat ruangan (satu akun per perawat) | Minta darah, catat mulai/selesai transfusi — **hanya untuk ruangannya** | Dashboard Perawat, Permintaan, Transfusi |
 
-Hak akses diatur oleh kolom `role` di tabel `pengguna` dan fungsi `wajib_login([...])` di **setiap halaman**.
+Tabel di atas adalah hak **bawaan**. Hak sebenarnya disimpan di tabel `hak_akses` dan bisa diubah Admin lewat menu
+**Hak Akses** (centang Lihat/Tambah/Ubah/Hapus per menu). Setiap halaman memanggil `wajib_hak('menu', 'aksi')`.
 Menu yang tidak berhak tidak muncul di sidebar, dan kalau alamatnya diketik langsung muncul "Akses ditolak".
 Aksi penting (misalnya "serahkan" atau "catat transfusi") juga dicek perannya di server, jadi tidak bisa diakali
 dengan mengirim formulir palsu.
@@ -168,7 +170,7 @@ Dashboard selalu menghitung ulang dari database:
 Tidak ada data yang berubah — dashboard hanya **membaca**.
 
 ### Langkah ③ — Permintaan darah dari ruangan
-**Siapa:** Perawat IGD (peran RUANGAN) · **Halaman:** Permintaan Darah
+**Siapa:** Perawat IGD (peran PERAWAT) · **Halaman:** Permintaan Darah
 
 1. Perawat mengisi: pasien **Bapak Andi**, dokter penanggung jawab, komponen **PRC**, jumlah **2**, urgensi **CITO**, diagnosis "perdarahan".
 2. Syarat: golongan darah pasien sudah tercatat *(BR-13)* dan dokter wajib diisi *(BR-14)*.
@@ -329,7 +331,7 @@ klik ganda atau dua petugas bersamaan tidak membuat data dobel.
 | `ruangan`, `dokter` | Ruangan peminta & dokter penanggung jawab | ③ |
 | `pengguna` | Akun & peran | semua |
 
-**Total 16 tabel, 24 foreign key.** Foreign key memastikan tidak ada data "yatim" — misalnya transfusi
+**Total 17 tabel (termasuk `hak_akses`), 25 foreign key.** Foreign key memastikan tidak ada data "yatim" — misalnya transfusi
 tanpa kantong, atau ruangan yang dihapus padahal masih punya riwayat permintaan.
 
 ---
@@ -339,8 +341,8 @@ tanpa kantong, atau ruangan yang dihapus padahal masih punya riwayat permintaan.
 | Bagian | Status |
 |---|---|
 | Proposal, PRD, ERD, kamus data, alur, aturan bisnis | ✅ selesai |
-| Database 16 tabel di XAMPP | ✅ selesai |
-| Login (termasuk catat login gagal), hak akses 4 peran, layout & menu | ✅ selesai |
+| Database 17 tabel di XAMPP | ✅ selesai |
+| Login (termasuk catat login gagal), hak akses 5 peran (diatur Admin di menu Hak Akses), dashboard dokter & perawat, layout & menu | ✅ selesai |
 | Dashboard (stok, peringatan, permintaan, grafik) | ✅ selesai |
 | Data master: ruangan, dokter, pasien, komponen, UDD, stok minimal (+ periode pemesanan), pengguna | ✅ selesai |
 | ① Penerimaan · ② Stok darah | ✅ selesai |
@@ -407,8 +409,8 @@ Folder `database/` ditutup dari browser (`.htaccess`), jadi file SQL tidak bisa 
 >
 > **Pembedanya:** peringatan dini kedaluwarsa dan rekomendasi pemesanan berbasis data.
 >
-> **Dari sisi manajemen data:** setiap kantong punya siklus hidup 6 status yang dijaga sistem, 16 tabel
-> terhubung dengan 24 foreign key, setiap perubahan tercatat di log aktivitas, hak akses dibedakan untuk
-> 4 peran, dan semua angka aturan medis disimpan di database sehingga bisa diubah tanpa mengubah kode.
+> **Dari sisi manajemen data:** setiap kantong punya siklus hidup 6 status yang dijaga sistem, 17 tabel
+> terhubung dengan 25 foreign key, setiap perubahan tercatat di log aktivitas, hak akses dibedakan untuk
+> 5 peran dengan hak akses yang bisa diatur Admin, dan semua angka aturan medis disimpan di database sehingga bisa diubah tanpa mengubah kode.
 >
 > **Status:** 16 menu berfungsi penuh, diuji per modul, dengan data dummy 90 hari untuk demo.
