@@ -10,7 +10,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-$saya = wajib_login(['ADMIN']);
+$saya = wajib_hak('pengguna', 'hapus');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {   // hapus hanya lewat tombol (POST)
     header('Location: index.php');
@@ -27,6 +27,9 @@ if (!$akun) {
     set_flash('danger', 'Data pengguna tidak ditemukan.');
 } elseif ($id === (int) $saya['id_pengguna']) {
     set_flash('danger', 'Anda tidak bisa menghapus akun Anda sendiri.');
+} elseif ($akun['role'] === 'DOKTER') {
+    // Akun dokter terikat ke data dokter (1:1); hapus lewat Master Dokter agar keduanya ikut terhapus
+    set_flash('warning', "Akun \"{$akun['username']}\" milik dokter. Hapus atau nonaktifkan lewat menu Dokter.");
 } else {
     $nama = $akun['username'];
 

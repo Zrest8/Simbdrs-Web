@@ -37,10 +37,15 @@ sampai ditransfusikan ke pasien. Pembedanya dibanding sistem BDRS lain:
 ## 4. Pengguna & Hak Akses
 | Peran | Siapa | Hak akses |
 |---|---|---|
-| `ADMIN` | Pengelola sistem | Akun pengguna, data master, pengaturan |
+| `ADMIN` | Pengelola sistem | Akun pengguna, data master, pengaturan, **hak akses** |
 | `PETUGAS` | Petugas BDRS | Penerimaan, proses permintaan, uji silang, penyerahan, pengembalian, pemusnahan |
-| `RUANGAN` | Dokter/perawat | Permintaan darah, catat transfusi — **hanya ruangannya sendiri** |
 | `KEPALA` | Kepala BDRS | Dashboard, laporan, rekomendasi pemesanan (hanya baca) |
+| `DOKTER` | Dokter penanggung jawab | Dashboard dokter: memantau permintaan & transfusi **pasien yang ia tangani** (hanya baca) |
+| `PERAWAT` | Perawat ruangan (satu akun per perawat) | Dashboard perawat, buat permintaan darah, catat transfusi — **hanya ruangannya sendiri** |
+
+Tabel di atas adalah hak **bawaan**. Hak sebenarnya disimpan di tabel `hak_akses` (per peran × per menu × aksi
+Lihat/Tambah/Ubah/Hapus) dan bisa diubah Admin lewat menu **Hak Akses** tanpa mengubah kode. Setiap dokter wajib
+punya akun; akun dokter dibuat otomatis saat Admin menambah dokter di Master Dokter.
 
 ## 5. Ruang Lingkup
 **Termasuk:** penerimaan kantong, stok, permintaan, pencocokan FEFO, uji silang, penyerahan, transfusi,
@@ -88,10 +93,14 @@ Perpindahan status di luar panah di atas **ditolak sistem**. Status akhir tidak 
 - Username/password salah atau kosong → ditolak dengan pesan.
 - Password disimpan dengan `password_hash()`; akun `aktif = 0` tidak bisa login.
 - Membuka halaman di luar peran → diarahkan/ditolak.
+- Menu di sidebar dan tombol aksi (tambah/ubah/hapus) mengikuti tabel `hak_akses`.
+- Admin bisa mengubah hak setiap peran di menu **Hak Akses** (centang Lihat/Tambah/Ubah/Hapus per menu); perubahan langsung berlaku dan tercatat di log.
+- Dokter dan perawat punya dashboard sendiri: dokter melihat pasien yang ia tangani, perawat melihat ruangannya.
 
 **F-02 Data master** — *Sebagai admin, saya mengelola ruangan, dokter, komponen, UDD, pasien, pengguna, stok minimal.*
 - CRUD lengkap; data yang sudah dipakai transaksi tidak bisa dihapus (dinonaktifkan saja).
-- `no_rm` dan `username` unik; pengguna `RUANGAN` wajib punya ruangan.
+- `no_rm` dan `username` unik; pengguna `PERAWAT` wajib punya ruangan.
+- Menambah dokter = membuat akun login dokter sekaligus (satu transaksi); akun dokter tidak bisa dibuat/dihapus dari menu Pengguna.
 
 **F-03 Penerimaan kantong** — *Sebagai petugas, saya mencatat kantong yang datang dari UDD.*
 - Satu penerimaan (no. dokumen, UDD, tanggal, suhu) berisi banyak kantong.
@@ -102,9 +111,9 @@ Perpindahan status di luar panah di atas **ditolak sistem**. Status akhir tidak 
 - Hanya menghitung kantong `TERSEDIA` yang belum kedaluwarsa.
 - Indikator warna: 🟢 aman, 🟡 ≤ batas peringatan, 🔴 kedaluwarsa.
 
-**F-05 Permintaan darah** — *Sebagai dokter/perawat, saya mengajukan permintaan darah untuk pasien.*
+**F-05 Permintaan darah** — *Sebagai perawat, saya mengajukan permintaan darah untuk pasien; dokter penanggung jawab memantaunya.*
 - Wajib: pasien (golongan darah terisi, BR-13), dokter penanggung jawab (BR-14), komponen, jumlah, urgensi.
-- Pengguna `RUANGAN` hanya melihat permintaan ruangannya (BR-11).
+- Perawat hanya melihat permintaan ruangannya; dokter hanya melihat permintaan pasien yang ia tangani (BR-11).
 
 **F-06 Pencocokan FEFO + uji silang** — *Sebagai petugas, saya memilih kantong yang cocok dan mencatat crossmatch.*
 - Sistem menampilkan kantong cocok (BR-04) urut kedaluwarsa terdekat (BR-05), tanpa kantong kedaluwarsa (BR-03).
@@ -154,7 +163,7 @@ Perpindahan status di luar panah di atas **ditolak sistem**. Status akhir tidak 
 | BR-08 | Peringatan jika sisa hari ≤ `batas_peringatan_hari` dan status `TERSEDIA` |
 | BR-09 | Peringatan stok jika jumlah `TERSEDIA` < `jumlah_minimal` |
 | BR-10 | Rekomendasi = ⌈rata-rata pemakaian harian 30 hari × periode pesan⌉ + stok minimal − stok tersedia, minimal 0 |
-| BR-11 | `RUANGAN` hanya akses data ruangannya |
+| BR-11 | `PERAWAT` hanya akses data ruangannya; `DOKTER` hanya data pasien yang ia tangani |
 | BR-12 | Setiap perubahan status kantong masuk `log_aktivitas` |
 | BR-13 | Golongan darah pasien wajib terisi sebelum permintaan diproses |
 | BR-14 | Permintaan wajib mencantumkan dokter penanggung jawab |
@@ -162,14 +171,14 @@ Perpindahan status di luar panah di atas **ditolak sistem**. Status akhir tidak 
 Semua angka (masa simpan, batas peringatan, stok minimal, periode pemesanan) disimpan di database dan bisa diubah admin.
 
 ## 9. Kebutuhan Non-Fungsional
-- **Keamanan:** prepared statement PDO di semua query, `password_hash()`/`password_verify()`, cek sesi & peran di setiap halaman, `htmlspecialchars()` saat menampilkan data.
+- **Keamanan:** prepared statement PDO di semua query, `password_hash()`/`password_verify()`, cek sesi & hak akses (tabel `hak_akses`) di setiap halaman, `htmlspecialchars()` saat menampilkan data.
 - **Integritas data:** InnoDB + foreign key, UNIQUE, ENUM; operasi multi-tabel memakai transaksi (`beginTransaction`/`commit`/`rollBack`).
 - **Privasi:** hanya data dummy (UU No. 27/2022); data pasien hanya untuk peran berwenang.
 - **Kemudahan:** antarmuka Bootstrap 5, bahasa Indonesia, bisa dipakai di layar laptop.
 - **Lingkungan:** prototipe lokal XAMPP (bukan server produksi).
 
 ## 10. Data
-16 tabel, 24 foreign key (rinci di `ERD.md`). Data uji = data **fiktif** hasil simulasi 90 hari
+17 tabel, 25 foreign key (rinci di `ERD.md`). Data uji = data **fiktif** hasil simulasi 90 hari
 (`database/buat_data_dummy.php` → `data_dummy.sql`). Bobot golongan darah di simulasi: O 37%, B 30%, A 25%, AB 8%
 (perkiraan kasar pola Indonesia, *TODO: verifikasi* bila angka nasional resmi diperlukan). Rhesus negatif ±4%.
 Tanggal ditulis relatif terhadap waktu impor (`NOW()` / `CURDATE()`).

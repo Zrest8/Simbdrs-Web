@@ -8,6 +8,6 @@
 define('BASE_URL', '/simbdrs');
 
 define('NAMA_APP', 'SIMBDRS');
-define('NAMA_RS', 'RS Contoh Sehat');   // nama rumah sakit fiktif untuk tampilan
+define('NAMA_RS', 'RS Mulyosari');      // nama rumah sakit yang tampil di sidebar
 
 date_default_timezone_set('Asia/Jakarta');

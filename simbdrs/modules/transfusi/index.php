@@ -4,24 +4,28 @@
 // Tabel (SELECT): kantong_darah, permintaan_darah, pasien, ruangan,
 //                 komponen_darah, transfusi, pengguna
 // Aksi dikirim ke aksi.php:
-//   PETUGAS  : serahkan  → kantong DIPESAN → DIKELUARKAN, baris transfusi dibuat
-//   RUANGAN  : mulai     → cek kantong & pasien di samping tempat tidur, isi tgl_mulai
-//              selesai   → isi tgl_selesai, kantong DIKELUARKAN → DITRANSFUSIKAN
-// BR-11: RUANGAN hanya melihat transfusi ruangannya.
+//   hak "tambah" (petugas) : serahkan → kantong DIPESAN → DIKELUARKAN, baris transfusi dibuat
+//   hak "ubah"  (perawat)  : mulai    → cek kantong & pasien di samping tempat tidur, isi tgl_mulai
+//                            selesai  → isi tgl_selesai, kantong DIKELUARKAN → DITRANSFUSIKAN
+// BR-11: perawat hanya melihat ruangannya; dokter hanya pasien yang ia tangani.
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-$saya = wajib_login(['PETUGAS', 'RUANGAN']);
+$saya = wajib_hak('transfusi');
 
 $judul = 'Transfusi';
 $menu_aktif = 'transfusi';
-$petugas = $saya['role'] === 'PETUGAS';
+$boleh_serah = hak('transfusi', 'tambah');   // menyerahkan kantong ke ruangan
+$boleh_catat = hak('transfusi', 'ubah');     // mencatat mulai / selesai transfusi
+$kolom_ruang = $saya['role'] !== 'PERAWAT';
 
-$filter_ruang = $petugas ? '' : ' AND p.id_ruangan = ' . (int) $saya['id_ruangan'];
+// BR-11: batas_data() memberi kondisi "p.id_ruangan = ?" / "p.id_dokter = ?" (nilainya angka)
+[$batas, $param_batas] = batas_data($saya);
+$filter_ruang = $batas === '' ? '' : ' AND ' . str_replace('?', (string) (int) $param_batas[0], $batas);
 
-// ---------- A. Siap diserahkan (PETUGAS) ----------
+// ---------- A. Siap diserahkan (hak tambah) ----------
 $siap = [];
-if ($petugas) {
+if ($boleh_serah) {
     $siap = $pdo->query(
         "SELECT k.id_kantong, k.no_kantong, k.gol_darah, k.rhesus, k.tgl_kedaluwarsa,
                 DATEDIFF(k.tgl_kedaluwarsa, CURDATE()) AS sisa_hari,
@@ -70,7 +74,7 @@ $sekarang = date('Y-m-d\TH:i');
 require __DIR__ . '/../../includes/header.php';
 ?>
 
-<?php if ($petugas): ?>
+<?php if ($boleh_serah): ?>
 <section class="panel h-auto mb-3">
     <div class="panel-head"><i class="bi bi-box-arrow-right"></i><h2>Siap Diserahkan ke Ruangan</h2>
         <span class="ms-auto small text-secondary">kantong DIPESAN (lolos uji silang) · CITO di atas</span></div>
@@ -85,13 +89,13 @@ require __DIR__ . '/../../includes/header.php';
                 <tr class="<?= $lewat ? 'table-danger' : '' ?>">
                     <td class="text-nowrap"><a href="<?= url('modules/permintaan/detail.php?id=' . (int) $k['id_permintaan']) ?>"><code><?= e($k['no_permintaan']) ?></code></a>
                         <?php if ($k['urgensi'] === 'CITO'): ?><span class="badge badge-cito ms-1">CITO</span><?php endif; ?></td>
-                    <td><?= e($k['nama_pasien']) ?><small class="d-block text-secondary"><?= e($k['no_rm']) ?></small></td>
-                    <td><?= e($k['nama_ruangan']) ?></td>
+                    <td class="text-nowrap"><?= e($k['nama_pasien']) ?><small class="d-block text-secondary"><?= e($k['no_rm']) ?></small></td>
+                    <td class="text-nowrap"><?= e($k['nama_ruangan']) ?></td>
                     <td class="text-nowrap"><code><?= e($k['no_kantong']) ?></code> <span class="fw-semibold"><?= e($k['kode'] . ' ' . $k['gol_darah'] . $k['rhesus']) ?></span></td>
                     <td class="text-nowrap small <?= $lewat ? 'text-danger fw-semibold' : '' ?>"><?= e(tgl_indo($k['tgl_kedaluwarsa'])) ?> · <?= e(teks_sisa_hari((int) $k['sisa_hari'])) ?></td>
                     <td class="text-end">
                         <?php if ($lewat): ?>
-                            <span class="small text-danger">Kedaluwarsa — lepas di halaman permintaan lalu musnahkan</span>
+                            <a class="btn btn-sm btn-outline-danger" href="<?= url('modules/permintaan/detail.php?id=' . (int) $k['id_permintaan']) ?>" title="Kantong kedaluwarsa: lepas dari permintaan, lalu musnahkan">Lepas kantong <i class="bi bi-arrow-right"></i></a>
                         <?php else: ?>
                         <form method="post" action="aksi.php" class="d-inline" onsubmit="return confirm('Serahkan kantong <?= e($k['no_kantong']) ?> ke <?= e(addslashes($k['nama_ruangan'])) ?> sekarang?');">
                             <?= csrf_field() ?>
@@ -112,23 +116,23 @@ require __DIR__ . '/../../includes/header.php';
 <?php endif; ?>
 
 <section class="panel h-auto mb-3">
-    <div class="panel-head"><i class="bi bi-heart-pulse"></i><h2><?= $petugas ? 'Sedang di Ruangan' : 'Darah Diterima Ruangan — Catat Transfusi' ?></h2>
+    <div class="panel-head"><i class="bi bi-heart-pulse"></i><h2><?= $boleh_catat ? 'Darah Diterima Ruangan — Catat Transfusi' : 'Sedang di Ruangan' ?></h2>
         <span class="ms-auto small text-secondary">status DIKELUARKAN</span></div>
     <?php if (!$berjalan): ?>
         <div class="empty-state py-4"><i class="bi bi-inbox"></i><p class="mt-2 mb-0">Tidak ada kantong yang sedang berada di ruangan.</p></div>
     <?php else: ?>
     <div class="table-responsive">
         <table class="table align-middle">
-            <thead><tr><th>Kantong</th><th>Pasien</th><?php if ($petugas): ?><th>Ruangan</th><?php endif; ?><th>Keluar BDRS</th><th>Mulai</th><?php if (!$petugas): ?><th style="min-width:330px">Pencatatan</th><?php endif; ?></tr></thead>
+            <thead><tr><th>Kantong</th><th>Pasien</th><?php if ($kolom_ruang): ?><th>Ruangan</th><?php endif; ?><th>Keluar BDRS</th><th>Mulai</th><?php if ($boleh_catat): ?><th style="min-width:330px">Pencatatan</th><?php endif; ?></tr></thead>
             <tbody>
             <?php foreach ($berjalan as $t): ?>
                 <tr>
                     <td class="text-nowrap"><code><?= e($t['no_kantong']) ?></code><small class="d-block fw-semibold"><?= e($t['kode'] . ' ' . $t['gol_darah'] . $t['rhesus']) ?></small></td>
-                    <td><?= e($t['nama_pasien']) ?><small class="d-block text-secondary"><?= e($t['no_rm']) ?></small></td>
-                    <?php if ($petugas): ?><td><?= e($t['nama_ruangan']) ?></td><?php endif; ?>
+                    <td class="text-nowrap"><?= e($t['nama_pasien']) ?><small class="d-block text-secondary"><?= e($t['no_rm']) ?></small></td>
+                    <?php if ($kolom_ruang): ?><td class="text-nowrap"><?= e($t['nama_ruangan']) ?></td><?php endif; ?>
                     <td class="text-nowrap small"><?= e(tgl_indo($t['tgl_keluar_bdrs'], true)) ?></td>
-                    <td class="text-nowrap small"><?= $t['tgl_mulai'] ? e(tgl_indo($t['tgl_mulai'], true)) : '<span class="text-secondary">belum</span>' ?></td>
-                    <?php if (!$petugas): ?>
+                    <td class="text-nowrap small"><?= $t['tgl_mulai'] ? e(tgl_indo($t['tgl_mulai'], true)) . '<span class="badge text-bg-primary d-block mt-1" style="width:fit-content">Sedang berjalan</span>' : '<span class="badge text-bg-secondary">Belum mulai</span>' ?></td>
+                    <?php if ($boleh_catat): ?>
                     <td>
                         <?php if (!$t['tgl_mulai']): ?>
                         <form method="post" action="aksi.php" class="row g-1 align-items-center">
@@ -156,7 +160,7 @@ require __DIR__ . '/../../includes/header.php';
             </tbody>
         </table>
     </div>
-    <?php if (!$petugas): ?>
+    <?php if ($boleh_catat): ?>
         <div class="panel-body border-top small text-secondary"><i class="bi bi-shield-check"></i> Sebelum mulai, cocokkan <strong>no. kantong</strong> pada label dan <strong>No. RM</strong> pada gelang pasien. Sistem menolak bila tidak sama (mencegah salah pasien). Kolom ini bisa diisi dengan pemindai QR/barcode.</div>
     <?php endif; ?>
     <?php endif; ?>
@@ -169,13 +173,13 @@ require __DIR__ . '/../../includes/header.php';
     <?php else: ?>
     <div class="table-responsive">
         <table class="table align-middle">
-            <thead><tr><th>Kantong</th><th>Pasien</th><?php if ($petugas): ?><th>Ruangan</th><?php endif; ?><th>Mulai</th><th>Selesai</th></tr></thead>
+            <thead><tr><th>Kantong</th><th>Pasien</th><?php if ($kolom_ruang): ?><th>Ruangan</th><?php endif; ?><th>Mulai</th><th>Selesai</th></tr></thead>
             <tbody>
             <?php foreach ($riwayat as $t): ?>
                 <tr>
                     <td class="text-nowrap"><code><?= e($t['no_kantong']) ?></code> <small class="fw-semibold"><?= e($t['kode'] . ' ' . $t['gol_darah'] . $t['rhesus']) ?></small></td>
-                    <td><?= e($t['nama_pasien']) ?><small class="d-block text-secondary"><?= e($t['no_rm']) ?></small></td>
-                    <?php if ($petugas): ?><td><?= e($t['nama_ruangan']) ?></td><?php endif; ?>
+                    <td class="text-nowrap"><?= e($t['nama_pasien']) ?><small class="d-block text-secondary"><?= e($t['no_rm']) ?></small></td>
+                    <?php if ($kolom_ruang): ?><td class="text-nowrap"><?= e($t['nama_ruangan']) ?></td><?php endif; ?>
                     <td class="text-nowrap small"><?= e(tgl_indo($t['tgl_mulai'], true)) ?></td>
                     <td class="text-nowrap small"><?= e(tgl_indo($t['tgl_selesai'], true)) ?></td>
                 </tr>

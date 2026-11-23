@@ -12,13 +12,17 @@ File SQL: [`../simbdrs/database/simbdrs.sql`](../simbdrs/database/simbdrs.sql)
 | 4 | Kolom `aktif` pada `ruangan`, `dokter`, `udd_asal`, `pasien`, `pengguna` | Data master yang sudah dipakai transaksi tidak dihapus, cukup dinonaktifkan (menjaga integritas riwayat). |
 | 5 | `created_at` hanya di `pengguna` | Tabel transaksi sudah punya kolom waktu kejadiannya sendiri (`tgl_terima`, `tgl_permintaan`, `tgl_uji`, `tgl_keluar_bdrs`, …), dan setiap perubahan tercatat di `log_aktivitas.waktu`. |
 | 6 | Tabel `reaksi_transfusi` dan kolom `transfusi.ada_reaksi` **dihapus** (11 Nov 2026) | Fitur hemovigilans dikeluarkan dari ruang lingkup agar project tetap sederhana. |
+| 7 | `dokter` dihubungkan ke `pengguna` (kolom `id_pengguna` NOT NULL UNIQUE); kolom `nama_dokter` & `aktif` dipindah ke `pengguna` (23 Nov 2026, masukan dosen) | Setiap dokter yang tampil di sistem **wajib punya akun** (relasi 1:1) supaya tidak rancu. Nama dan status aktif cukup disimpan sekali di `pengguna` (normalisasi). |
+| 8 | Peran `RUANGAN` dipecah menjadi `DOKTER` dan `PERAWAT` (23 Nov 2026) | Dokter dan perawat punya dashboard sendiri. Satu akun per perawat, terikat ke satu ruangan. |
+| 9 | Tabel baru **`hak_akses`** (23 Nov 2026, masukan dosen) | Hak akses per peran per menu (lihat/tambah/ubah/hapus) disimpan di database sehingga Admin bisa mengubahnya dari menu **Hak Akses**, tanpa mengubah kode. |
 
-Total: **16 tabel** (16 dari draf README + `pengaturan` − `reaksi_transfusi`), **24 foreign key**.
+Total: **17 tabel** (16 dari draf README + `pengaturan` + `hak_akses` − `reaksi_transfusi`), **25 foreign key**.
 
 ## Diagram ERD
 ```mermaid
 erDiagram
-  ruangan ||--o{ pengguna : "punya akun"
+  ruangan ||--o{ pengguna : "punya akun perawat"
+  pengguna ||--o| dokter : "akun dokter (1:1)"
   ruangan ||--o{ permintaan_darah : mengajukan
   dokter ||--o{ permintaan_darah : "penanggung jawab"
   pasien ||--o{ permintaan_darah : untuk
@@ -45,14 +49,15 @@ erDiagram
 ## Kelompok tabel
 | Kelompok | Tabel |
 |---|---|
-| Master | `ruangan`, `dokter`, `udd_asal`, `komponen_darah`, `pasien`, `pengguna`, `stok_minimal`, `pengaturan` |
+| Master | `ruangan`, `udd_asal`, `komponen_darah`, `pasien`, `pengguna`, `dokter`, `stok_minimal`, `pengaturan` |
+| Hak akses | `hak_akses` (tidak ber-FK: `kunci_menu` mengacu ke daftar menu di `includes/menu.php`) |
 | Transaksi stok | `penerimaan`, `kantong_darah` |
 | Layanan pasien | `permintaan_darah`, `uji_silang`, `transfusi` |
 | Kantong keluar | `pengembalian`, `pemusnahan` |
 | Tata kelola | `log_aktivitas` |
 
 **Urutan pembuatan** (tabel induk dulu, baru anak yang punya FK):
-`ruangan → dokter → udd_asal → komponen_darah → pasien → pengguna → stok_minimal → pengaturan → penerimaan → permintaan_darah → kantong_darah → uji_silang → transfusi → pengembalian → pemusnahan → log_aktivitas`
+`ruangan → udd_asal → komponen_darah → pasien → pengguna → dokter → hak_akses → stok_minimal → pengaturan → penerimaan → permintaan_darah → kantong_darah → uji_silang → transfusi → pengembalian → pemusnahan → log_aktivitas`
 
 ---
 
@@ -67,13 +72,13 @@ erDiagram
 | nama_ruangan | VARCHAR(100) UNIQUE | IGD, ICU, Bedah, ... |
 | aktif | TINYINT(1) | default 1 |
 
-**dokter** — dokter penanggung jawab permintaan (BR-14)
+**dokter** — dokter penanggung jawab permintaan (BR-14). Setiap dokter **wajib punya akun** (`pengguna` ber-peran `DOKTER`).
+Nama & status aktif dibaca dari `pengguna`. Dibuat lewat menu Master Dokter (akun + data dokter dalam satu transaksi).
 | Kolom | Tipe | Ket. |
 |---|---|---|
 | id_dokter | INT PK AI | |
-| nama_dokter | VARCHAR(100) | fiktif |
+| id_pengguna | INT FK NOT NULL UNIQUE → pengguna | akun login dokter (relasi 1:1) |
 | spesialis | VARCHAR(100) NULL | |
-| aktif | TINYINT(1) | default 1 |
 
 **udd_asal** — UDD/UTD PMI pengirim darah
 | Kolom | Tipe | Ket. |
@@ -113,10 +118,23 @@ erDiagram
 | nama | VARCHAR(100) | |
 | username | VARCHAR(50) UNIQUE | |
 | password_hash | VARCHAR(255) | hasil `password_hash()` |
-| role | ENUM('ADMIN','PETUGAS','RUANGAN','KEPALA') | |
-| id_ruangan | INT FK NULL → ruangan | wajib jika role = RUANGAN (dicek di PHP) |
+| role | ENUM('ADMIN','PETUGAS','KEPALA','DOKTER','PERAWAT') | akun `DOKTER` hanya dibuat lewat Master Dokter |
+| id_ruangan | INT FK NULL → ruangan | wajib jika role = PERAWAT (dicek di PHP) |
 | aktif | TINYINT(1) | default 1 |
 | created_at | DATETIME | default sekarang |
+
+**hak_akses** — siapa boleh apa, diatur Admin di menu **Hak Akses**
+| Kolom | Tipe | Ket. |
+|---|---|---|
+| role | ENUM(sama dengan `pengguna.role`) | PK (bersama `kunci_menu`) |
+| kunci_menu | VARCHAR(30) | PK; kunci menu di `includes/menu.php`, mis. `permintaan` |
+| lihat | TINYINT(1) | boleh membuka menu (menu tampil di sidebar) |
+| tambah | TINYINT(1) | mis. buat permintaan, terima kantong |
+| ubah | TINYINT(1) | mis. proses permintaan, catat transfusi |
+| hapus | TINYINT(1) | mis. batalkan permintaan, hapus data master |
+
+Aksi selain `lihat` hanya berlaku bila `lihat = 1`. Hak Admin atas menu Pengguna & Hak Akses dikunci di kode
+(`HAK_TERKUNCI`) agar Admin tidak bisa mengunci dirinya sendiri keluar. Dashboard selalu bisa dibuka semua peran.
 
 **stok_minimal** — batas stok per kombinasi (BR-09)
 | Kolom | Tipe | Ket. |
@@ -234,7 +252,7 @@ CHECK: `tgl_kedaluwarsa >= tgl_aftap`.
 |---|---|---|
 | id_log | INT PK AI | |
 | id_pengguna | INT FK NULL → pengguna | pelaku (dari session); NULL untuk `LOGIN_GAGAL` karena belum login — akun yang dicoba disimpan di `id_data` |
-| aksi | VARCHAR(50) | `LOGIN`, `LOGIN_GAGAL`, `LOGOUT`, `TAMBAH`, `UBAH`, `HAPUS`, `NONAKTIF`, `TERIMA`, `UJI_SILANG`, `STATUS`, `BATAL`, `MULAI`, `TOLAK` |
+| aksi | VARCHAR(50) | `LOGIN`, `LOGIN_GAGAL`, `LOGOUT`, `TAMBAH`, `UBAH` (termasuk perubahan hak akses), `HAPUS`, `NONAKTIF`, `TERIMA`, `UJI_SILANG`, `STATUS`, `BATAL`, `MULAI`, `TOLAK` |
 | nama_tabel | VARCHAR(50) NULL | |
 | id_data | INT NULL | |
 | keterangan | TEXT NULL | mis. `TERSEDIA → DIPESAN` |

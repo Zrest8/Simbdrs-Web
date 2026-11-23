@@ -2,15 +2,15 @@
 // =====================================================================
 // Transfusi — AKSI (POST saja)
 //
-//  serahkan (PETUGAS)  kantong DIPESAN → DIKELUARKAN; INSERT transfusi
+//  serahkan (hak tambah) kantong DIPESAN → DIKELUARKAN; INSERT transfusi
 //                      (id_kantong UNIQUE → BR-06 satu kantong satu pasien)
-//  mulai    (RUANGAN)  verifikasi no. kantong + No. RM pasien, UPDATE transfusi.tgl_mulai
-//  selesai  (RUANGAN)  UPDATE transfusi.tgl_selesai; kantong DIKELUARKAN → DITRANSFUSIKAN
+//  mulai    (hak ubah)  verifikasi no. kantong + No. RM pasien, UPDATE transfusi.tgl_mulai
+//  selesai  (hak ubah)  UPDATE transfusi.tgl_selesai; kantong DIKELUARKAN → DITRANSFUSIKAN
 //  Semua: log_aktivitas (BR-12), satu transaksi, perubahan status dijaga WHERE status lama.
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-$saya = wajib_login(['PETUGAS', 'RUANGAN']);
+$saya = wajib_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect('modules/transfusi/index.php');
@@ -49,8 +49,8 @@ $pdo->beginTransaction();
 
 // -------------------------------------------------------------------
 if ($aksi === 'serahkan') {
-    if ($saya['role'] !== 'PETUGAS') {
-        gagal($pdo, 'Hanya petugas BDRS yang menyerahkan darah.');
+    if (!hak('transfusi', 'tambah')) {
+        gagal($pdo, 'Peran Anda tidak memiliki hak menyerahkan darah.');
     }
     $stmt = $pdo->prepare(
         "SELECT k.*, p.no_permintaan, p.id_pasien, p.status AS status_permintaan, r.nama_ruangan
@@ -95,11 +95,11 @@ if ($aksi === 'serahkan') {
 
 // -------------------------------------------------------------------
 if ($aksi === 'mulai' || $aksi === 'selesai') {
-    if ($saya['role'] !== 'RUANGAN') {
-        gagal($pdo, 'Pencatatan transfusi dilakukan oleh dokter/perawat ruangan.');
+    if (!hak('transfusi', 'ubah')) {
+        gagal($pdo, 'Peran Anda tidak memiliki hak mencatat transfusi.');
     }
     $stmt = $pdo->prepare(
-        "SELECT t.*, k.no_kantong, k.status AS status_kantong, ps.no_rm, ps.nama_pasien, p.id_ruangan
+        "SELECT t.*, k.no_kantong, k.status AS status_kantong, ps.no_rm, ps.nama_pasien, p.id_ruangan, p.id_dokter
          FROM transfusi t
          JOIN kantong_darah k    ON k.id_kantong = t.id_kantong
          JOIN pasien ps          ON ps.id_pasien = t.id_pasien
@@ -108,7 +108,7 @@ if ($aksi === 'mulai' || $aksi === 'selesai') {
     );
     $stmt->execute([(int) ($_POST['id_transfusi'] ?? 0)]);
     $t = $stmt->fetch();
-    if (!$t || (int) $t['id_ruangan'] !== (int) $saya['id_ruangan']) {   // BR-11
+    if (!$t || !milik_saya($saya, $t)) {   // BR-11
         gagal($pdo, 'Data transfusi tidak ditemukan.');
     }
     if ($t['status_kantong'] !== 'DIKELUARKAN') {

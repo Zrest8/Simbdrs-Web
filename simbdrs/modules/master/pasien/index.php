@@ -5,7 +5,10 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('pasien', 'lihat');
+$boleh_tambah = hak('pasien', 'tambah');
+$boleh_ubah   = hak('pasien', 'ubah');
+$boleh_hapus  = hak('pasien', 'hapus');
 
 $judul = 'Data Pasien';
 $menu_aktif = 'pasien';
@@ -41,7 +44,7 @@ require __DIR__ . '/../../../includes/header.php';
             <input class="form-control form-control-sm" name="cari" value="<?= e($cari) ?>" placeholder="Cari No. RM / nama..." aria-label="Cari pasien">
             <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
         </form>
-        <a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Tambah</a>
+        <?php if ($boleh_tambah): ?><a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Tambah</a><?php endif; ?>
     </div>
 
     <?php if (!$daftar): ?>
@@ -61,7 +64,7 @@ require __DIR__ . '/../../../includes/header.php';
                     <td><?= (int) $r['umur'] ?> th</td>
                     <td>
                         <?php if ($r['gol_darah']): ?>
-                            <span class="badge text-bg-danger"><?= e($r['gol_darah'] . $r['rhesus']) ?></span>
+                            <span class="kode-komponen"><?= e($r['gol_darah'] . $r['rhesus']) ?></span>
                         <?php else: ?>
                             <span class="badge text-bg-warning" title="Wajib diisi sebelum permintaan darah diproses (BR-13)">Belum diperiksa</span>
                         <?php endif; ?>
@@ -69,13 +72,15 @@ require __DIR__ . '/../../../includes/header.php';
                     <td><small><?= (int) $r['jml_permintaan'] ?> permintaan · <?= (int) $r['jml_transfusi'] ?> transfusi</small></td>
                     <td><?= $r['aktif'] ? '<span class="badge text-bg-success">Aktif</span>' : '<span class="badge text-bg-secondary">Nonaktif</span>' ?></td>
                     <td class="text-end text-nowrap">
-                        <a class="btn btn-sm btn-outline-secondary" href="edit.php?id=<?= (int) $r['id_pasien'] ?>"><i class="bi bi-pencil"></i> Edit</a>
+                        <?php if ($boleh_ubah): ?><a class="btn btn-sm btn-outline-secondary" href="edit.php?id=<?= (int) $r['id_pasien'] ?>"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
+                        <?php if ($boleh_hapus): ?>
                         <form class="d-inline" method="post" action="hapus.php"
                               onsubmit="return confirm('Hapus pasien <?= e(addslashes($r['nama_pasien'])) ?>? Jika punya riwayat, pasien hanya akan dinonaktifkan.');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="id" value="<?= (int) $r['id_pasien'] ?>">
-                            <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Hapus</button>
+                            <button class="btn btn-sm btn-ikon btn-hapus" type="submit" aria-label="Hapus" title="Hapus"><i class="bi bi-trash" aria-hidden="true"></i></button>
                         </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>

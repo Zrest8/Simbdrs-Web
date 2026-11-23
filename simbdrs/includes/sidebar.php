@@ -1,12 +1,11 @@
 <?php
 // =====================================================================
-// Menu samping. Setiap menu punya daftar peran yang boleh melihatnya.
+// Menu samping. Menu tampil bila peran punya hak "lihat" (tabel hak_akses).
 // Daftar menu ada di includes/menu.php.
 // Menu yang modulnya belum dibuat tetap bisa diklik → halaman "sedang dibangun".
 // =====================================================================
 require __DIR__ . '/menu.php';
 
-$peran_saya = pengguna()['role'];
 
 // Buang judul grup yang tidak punya menu untuk peran ini
 $tampil = [];
@@ -16,7 +15,7 @@ foreach ($menu as $m) {
         $judul_tunda = $m;
         continue;
     }
-    if (!in_array($peran_saya, $m['peran'], true)) {
+    if (!hak($m['kunci'], 'lihat')) {
         continue;
     }
     if ($judul_tunda) {
@@ -33,7 +32,7 @@ foreach ($menu as $m) {
             <div class="fw-bold"><?= e(NAMA_APP) ?></div>
             <small><?= e(NAMA_RS) ?></small>
         </div>
-        <button type="button" class="btn-close btn-close-white ms-auto d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Tutup"></button>
+        <button type="button" class="btn-close ms-auto d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#sidebar" aria-label="Tutup"></button>
     </div>
 
     <nav class="sidebar-nav">

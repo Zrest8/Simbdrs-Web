@@ -105,9 +105,41 @@ function nama_role(string $role): string
     return [
         'ADMIN'   => 'Administrator',
         'PETUGAS' => 'Petugas BDRS',
-        'RUANGAN' => 'Dokter / Perawat',
         'KEPALA'  => 'Kepala BDRS',
+        'DOKTER'  => 'Dokter',
+        'PERAWAT' => 'Perawat',
     ][$role] ?? $role;
+}
+
+/**
+ * BR-11: batas data permintaan/transfusi yang boleh dilihat pengguna.
+ *   PERAWAT → hanya ruangannya sendiri
+ *   DOKTER  → hanya pasien yang ia tangani (dokter penanggung jawab)
+ *   peran lain → semua data
+ * Mengembalikan [kondisi SQL, parameter]; kondisi '' berarti tanpa batas.
+ * $alias = alias tabel permintaan_darah di query pemanggil.
+ */
+function batas_data(array $saya, string $alias = 'p'): array
+{
+    if ($saya['role'] === 'PERAWAT') {
+        return ["$alias.id_ruangan = ?", [(int) $saya['id_ruangan']]];
+    }
+    if ($saya['role'] === 'DOKTER') {
+        return ["$alias.id_dokter = ?", [(int) ($saya['id_dokter'] ?? 0)]];
+    }
+    return ['', []];
+}
+
+/** Apakah satu baris permintaan (punya id_ruangan & id_dokter) termasuk data milik pengguna ini? */
+function milik_saya(array $saya, array $baris): bool
+{
+    if ($saya['role'] === 'PERAWAT') {
+        return (int) $baris['id_ruangan'] === (int) $saya['id_ruangan'];
+    }
+    if ($saya['role'] === 'DOKTER') {
+        return (int) $baris['id_dokter'] === (int) ($saya['id_dokter'] ?? 0);
+    }
+    return true;
 }
 
 /** Badge berwarna untuk status kantong darah (6 status siklus hidup). */

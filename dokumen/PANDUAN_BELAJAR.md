@@ -57,7 +57,7 @@ Aplikasi web punya **3 bagian** yang bekerja bersama:
 ### Langkah membuka
 1. XAMPP Control Panel → **Start** Apache dan MySQL (keduanya harus hijau).
 2. Browser → buka **`http://localhost/phpmyadmin`**
-3. Di panel kiri, klik database **`simbdrs`** → muncul daftar 16 tabel.
+3. Di panel kiri, klik database **`simbdrs`** → muncul daftar 17 tabel.
 
 ### Tab-tab yang perlu kamu kuasai
 
@@ -99,7 +99,7 @@ Inilah yang disebut **integritas referensial**, dan ini contoh bagus untuk prese
 
 ### Kalau database rusak / mau mulai dari awal
 phpMyAdmin → tab **Import** → pilih `simbdrs/database/simbdrs.sql` → **Go**.
-File ini menghapus database lama lalu membuat ulang 16 tabel + data awal.
+File ini menghapus database lama lalu membuat ulang 17 tabel + data awal.
 
 ### Backup (penting!)
 Klik database `simbdrs` → tab **Export** → **Go** → simpan file `.sql`-nya.
@@ -128,7 +128,7 @@ simbdrs/
 │   ├── dashboard/index.php    → halaman dashboard
 │   └── master/ruangan/        → ⭐ contoh CRUD lengkap (pola untuk modul lain)
 ├── assets/css/style.css       → tampilan (warna, ukuran)
-└── database/simbdrs.sql       → struktur 16 tabel + data awal
+└── database/simbdrs.sql       → struktur 17 tabel + data awal
 ```
 
 ### Urutan file yang dimuat saat kamu membuka satu halaman
@@ -141,7 +141,7 @@ ruangan/index.php
                ├─ require config/app.php        (BASE_URL, nama app)
                ├─ require config/koneksi.php    (→ $pdo siap dipakai)
                └─ session_start()               (ingat siapa yang login)
-   └─ wajib_login(['ADMIN'])                     (bukan admin? → ditolak)
+   └─ wajib_hak('ruangan', 'lihat')              (tak punya hak? → ditolak; dibaca dari tabel hak_akses)
    └─ query SELECT ke tabel ruangan
    └─ require includes/header.php  → sidebar.php
    └─ (isi halaman: tabel daftar ruangan)
@@ -194,7 +194,7 @@ Semua modul data master nanti mengikuti pola yang **sama persis** dengan Ruangan
 ### Isi `tambah.php`, baris demi baris (disederhanakan)
 ```php
 require __DIR__ . '/../../../auth/cek_akses.php';   // 1. muat koneksi + session
-wajib_login(['ADMIN']);                             // 2. hanya ADMIN boleh
+wajib_hak('ruangan', 'tambah');                     // 2. hanya peran yang punya hak "tambah" boleh
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {        // 3. tombol Simpan ditekan?
     $nama = trim($_POST['nama_ruangan']);           // 4. ambil isian form
@@ -247,7 +247,7 @@ File: [`modules/dashboard/index.php`](../simbdrs/modules/dashboard/index.php). D
 | Hampir kedaluwarsa | `... WHERE status='TERSEDIA' AND DATEDIFF(tgl_kedaluwarsa, CURDATE()) BETWEEN 0 AND batas_peringatan_hari` | BR-08 |
 | Stok di bawah minimum | `stok_minimal LEFT JOIN kantong_darah ... HAVING tersedia < jumlah_minimal` | BR-09 |
 | Permintaan masuk | `... ORDER BY (urgensi='CITO') DESC, tgl_permintaan ASC` → CITO selalu paling atas | – |
-| Permintaan (peran RUANGAN) | ditambah `AND p.id_ruangan = ?` → hanya ruangannya sendiri | BR-11 |
+| Permintaan (peran PERAWAT / DOKTER) | ditambah `AND p.id_ruangan = ?` (perawat) atau `AND p.id_dokter = ?` (dokter) lewat fungsi `batas_data()` | BR-11 |
 | Grafik | `COUNT(*) ... GROUP BY DATE_FORMAT(tgl, '%Y-%m')` dari tabel `transfusi` dan `pemusnahan` | F-12 |
 
 > Dashboard sekarang menampilkan 0 karena belum ada data transaksi. Angka akan muncul setelah
@@ -261,7 +261,7 @@ File: [`modules/dashboard/index.php`](../simbdrs/modules/dashboard/index.php). D
 |---|---|---|---|
 | 1 | **Prepared statement** | `$pdo->prepare("... ?")` + `->execute([...])` | SQL Injection |
 | 2 | **Escape saat menampilkan** | `<?= e($data) ?>` (fungsi `e()` = `htmlspecialchars`) | XSS (sisipan script jahat) |
-| 3 | **Cek sesi & peran** | `wajib_login(['ADMIN'])` di baris paling atas | Orang tanpa izin membuka halaman |
+| 3 | **Cek sesi & peran** | `wajib_hak('ruangan', 'tambah')` di baris paling atas | Orang tanpa izin membuka halaman |
 
 Tambahan: **password_hash / password_verify** (password tidak disimpan asli) dan **token CSRF**
 (`csrf_field()` di form + `cek_csrf()` saat diproses) supaya form tidak bisa dikirim dari situs lain.
@@ -298,5 +298,5 @@ Kerjakan berurutan. Setiap latihan, cek hasilnya di **browser** lalu di **phpMyA
 | Bagaimana tanggal kedaluwarsa dihitung? | `tgl_aftap + masa_simpan_hari` dari tabel `komponen_darah` (BR-01); angkanya disimpan di database, bukan di kode. |
 | Apa itu FEFO? | First Expired First Out: kantong yang paling dekat kedaluwarsa disarankan dipakai dulu (`ORDER BY tgl_kedaluwarsa ASC`). |
 | Bagaimana audit trail bekerja? | Fungsi `catat_log()` menulis ke tabel `log_aktivitas` setiap login, tambah, ubah, hapus. |
-| Bagaimana hak akses diatur? | Kolom `role` di tabel `pengguna`; fungsi `wajib_login([...])` di setiap halaman; menu sidebar disaring sesuai peran. |
+| Bagaimana hak akses diatur? | Kolom `role` di tabel `pengguna` + tabel `hak_akses` (diatur Admin di menu Hak Akses); fungsi `wajib_hak('menu', 'aksi')` di setiap halaman; menu sidebar & tombol mengikuti hak tersebut. |
 | Kenapa data dummy? | Data kesehatan dilindungi UU No. 27/2022 tentang Pelindungan Data Pribadi. |

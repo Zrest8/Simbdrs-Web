@@ -7,11 +7,12 @@
 //  - Password kosong = tidak diubah.
 //  - Admin tidak bisa mengubah peran / menonaktifkan akunnya sendiri.
 //  - Harus selalu tersisa minimal satu ADMIN aktif.
+//  - Akun DOKTER: perannya dikunci (akun dokter dikelola di Master Dokter).
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
 require __DIR__ . '/_validasi.php';
-$saya = wajib_login(['ADMIN']);
+$saya = wajib_hak('pengguna', 'ubah');
 
 $judul = 'Edit Pengguna';
 $menu_aktif = 'pengguna';
@@ -28,6 +29,7 @@ if (!$lama) {
 }
 
 $akun_sendiri = $id === (int) $saya['id_pengguna'];
+$akun_dokter  = $lama['role'] === 'DOKTER';
 $p = [
     'nama'       => $lama['nama'],
     'username'   => $lama['username'],
@@ -49,10 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $p['role'] = $lama['role'];
         $aktif = 1;
     }
+    if ($akun_dokter) {
+        $p['role'] = 'DOKTER';
+    }
 
-    $error = validasi_pengguna($p, false);
+    $error = validasi_pengguna($p, false, $akun_dokter ? ['DOKTER'] : PERAN_VALID);
 
-    if ($error === '' && $p['role'] === 'RUANGAN' && !ruangan_boleh($pdo, $p['id_ruangan'], (int) $lama['id_ruangan'])) {
+    if ($error === '' && $p['role'] === 'PERAWAT' && !ruangan_boleh($pdo, $p['id_ruangan'], (int) $lama['id_ruangan'])) {
         $error = 'Ruangan yang dipilih tidak ditemukan atau sudah nonaktif.';
     }
 
@@ -68,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($error === '') {
-        $id_ruangan = $p['role'] === 'RUANGAN' ? $p['id_ruangan'] : null;
+        $id_ruangan = $p['role'] === 'PERAWAT' ? $p['id_ruangan'] : null;
         try {
             if ($p['password'] !== '') {
                 $stmt = $pdo->prepare(

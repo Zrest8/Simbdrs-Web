@@ -9,7 +9,10 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('komponen', 'lihat');
+$boleh_tambah = hak('komponen', 'tambah');
+$boleh_ubah   = hak('komponen', 'ubah');
+$boleh_hapus  = hak('komponen', 'hapus');
 
 $judul = 'Data Komponen Darah';
 $menu_aktif = 'komponen';
@@ -38,7 +41,7 @@ require __DIR__ . '/../../../includes/header.php';
 <section class="panel">
     <div class="panel-head flex-wrap">
         <i class="bi bi-capsule"></i><h2>Daftar Komponen Darah</h2>
-        <a class="btn btn-sm btn-primary ms-auto" href="tambah.php"><i class="bi bi-plus-lg"></i> Tambah</a>
+        <?php if ($boleh_tambah): ?><a class="btn btn-sm btn-primary ms-auto" href="tambah.php"><i class="bi bi-plus-lg"></i> Tambah</a><?php endif; ?>
     </div>
 
     <?php if (!$daftar): ?>
@@ -51,23 +54,25 @@ require __DIR__ . '/../../../includes/header.php';
             <?php foreach ($daftar as $r): ?>
                 <?php $dipakai = $r['jml_kantong'] + $r['jml_permintaan'] + $r['jml_stokmin']; ?>
                 <tr>
-                    <td><span class="badge text-bg-danger"><?= e($r['kode']) ?></span></td>
+                    <td><span class="kode-komponen"><?= e($r['kode']) ?></span></td>
                     <td class="fw-semibold"><?= e($r['nama_komponen']) ?></td>
                     <td><?= e(teks_suhu($r['suhu_min'], $r['suhu_max'])) ?></td>
                     <td><?= (int) $r['masa_simpan_hari'] ?> hari</td>
                     <td>≤ <?= (int) $r['batas_peringatan_hari'] ?> hari</td>
                     <td><small><?= (int) $r['jml_kantong'] ?> kantong · <?= (int) $r['jml_permintaan'] ?> permintaan</small></td>
                     <td class="text-end text-nowrap">
-                        <a class="btn btn-sm btn-outline-secondary" href="edit.php?id=<?= (int) $r['id_komponen'] ?>"><i class="bi bi-pencil"></i> Edit</a>
+                        <?php if ($boleh_ubah): ?><a class="btn btn-sm btn-outline-secondary" href="edit.php?id=<?= (int) $r['id_komponen'] ?>"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
+                        <?php if ($boleh_hapus): ?>
                         <?php if ($dipakai > 0): ?>
-                            <button class="btn btn-sm btn-outline-danger" type="button" disabled title="Sudah dipakai, tidak bisa dihapus"><i class="bi bi-trash"></i> Hapus</button>
+                            <button class="btn btn-sm btn-ikon btn-hapus" type="button" disabled aria-label="Hapus (sudah dipakai)" title="Sudah dipakai, tidak bisa dihapus"><i class="bi bi-trash" aria-hidden="true"></i></button>
                         <?php else: ?>
                         <form class="d-inline" method="post" action="hapus.php"
                               onsubmit="return confirm('Hapus komponen <?= e(addslashes($r['kode'])) ?>?');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="id" value="<?= (int) $r['id_komponen'] ?>">
-                            <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Hapus</button>
+                            <button class="btn btn-sm btn-ikon btn-hapus" type="submit" aria-label="Hapus" title="Hapus"><i class="bi bi-trash" aria-hidden="true"></i></button>
                         </form>
+                        <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>

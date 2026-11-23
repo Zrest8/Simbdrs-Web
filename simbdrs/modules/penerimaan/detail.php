@@ -6,7 +6,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-wajib_login(['PETUGAS']);
+wajib_hak('penerimaan');
 
 $judul = 'Detail Penerimaan';
 $menu_aktif = 'penerimaan';
@@ -55,8 +55,8 @@ require __DIR__ . '/../../includes/header.php';
 <div class="mb-3"><a href="index.php" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Kembali ke daftar penerimaan</a></div>
 
 <div class="row g-3">
-    <div class="col-lg-4">
-        <section class="panel">
+    <div class="col-lg-4 col-xl-3">
+        <section class="panel h-auto panel-lekat">
             <div class="panel-head"><i class="bi bi-file-earmark-text"></i><h2>Data Kiriman</h2></div>
             <div class="panel-body">
                 <dl class="mb-0 small">
@@ -77,7 +77,7 @@ require __DIR__ . '/../../includes/header.php';
         </section>
     </div>
 
-    <div class="col-lg-8">
+    <div class="col-lg-8 col-xl-9">
         <section class="panel">
             <div class="panel-head"><i class="bi bi-droplet"></i><h2>Kantong dalam Kiriman (<?= count($kantong) ?>)</h2>
                 <span class="ms-auto small text-secondary">urut kedaluwarsa terdekat</span></div>
@@ -99,7 +99,7 @@ require __DIR__ . '/../../includes/header.php';
                                 <?php if ($masih_di_stok): ?>
                                     <br><small class="<?= $sisa < 0 ? 'text-danger fw-semibold' : 'text-secondary' ?>"><?= e(teks_sisa_hari($sisa)) ?></small>
                                 <?php endif; ?></td>
-                            <td><?= badge_status_kantong($k['status']) ?></td>
+                            <td class="text-nowrap"><?= badge_status_kantong($k['status']) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

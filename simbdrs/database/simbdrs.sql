@@ -22,14 +22,6 @@ CREATE TABLE ruangan (
     aktif         TINYINT(1)   NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
 
--- Dokter penanggung jawab permintaan darah (BR-14)
-CREATE TABLE dokter (
-    id_dokter    INT AUTO_INCREMENT PRIMARY KEY,
-    nama_dokter  VARCHAR(100) NOT NULL,
-    spesialis    VARCHAR(100) NULL,
-    aktif        TINYINT(1)   NOT NULL DEFAULT 1
-) ENGINE=InnoDB;
-
 -- UDD/UTD PMI pengirim darah
 CREATE TABLE udd_asal (
     id_udd    INT AUTO_INCREMENT PRIMARY KEY,
@@ -63,17 +55,39 @@ CREATE TABLE pasien (
     aktif          TINYINT(1)   NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
 
--- Akun pengguna. id_ruangan wajib diisi jika role = RUANGAN (dicek di PHP).
+-- Akun pengguna. id_ruangan wajib diisi jika role = PERAWAT (dicek di PHP).
 CREATE TABLE pengguna (
     id_pengguna    INT AUTO_INCREMENT PRIMARY KEY,
     nama           VARCHAR(100) NOT NULL,
     username       VARCHAR(50)  NOT NULL UNIQUE,
     password_hash  VARCHAR(255) NOT NULL,
-    role           ENUM('ADMIN','PETUGAS','RUANGAN','KEPALA') NOT NULL,
+    role           ENUM('ADMIN','PETUGAS','KEPALA','DOKTER','PERAWAT') NOT NULL,
     id_ruangan     INT NULL,
     aktif          TINYINT(1)   NOT NULL DEFAULT 1,
     created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_pengguna_ruangan FOREIGN KEY (id_ruangan) REFERENCES ruangan(id_ruangan)
+) ENGINE=InnoDB;
+
+-- Dokter penanggung jawab permintaan darah (BR-14).
+-- Setiap dokter WAJIB punya akun login: id_pengguna NOT NULL + UNIQUE (relasi 1:1).
+-- Nama & status aktif dokter dibaca dari tabel pengguna (tidak disimpan dua kali).
+CREATE TABLE dokter (
+    id_dokter    INT AUTO_INCREMENT PRIMARY KEY,
+    id_pengguna  INT NOT NULL UNIQUE,
+    spesialis    VARCHAR(100) NULL,
+    CONSTRAINT fk_dokter_pengguna FOREIGN KEY (id_pengguna) REFERENCES pengguna(id_pengguna)
+) ENGINE=InnoDB;
+
+-- Hak akses per peran per menu, diatur Admin lewat menu "Hak Akses" (tanpa ubah kode).
+-- kunci_menu mengacu pada daftar menu di includes/menu.php.
+CREATE TABLE hak_akses (
+    role        ENUM('ADMIN','PETUGAS','KEPALA','DOKTER','PERAWAT') NOT NULL,
+    kunci_menu  VARCHAR(30) NOT NULL,
+    lihat       TINYINT(1) NOT NULL DEFAULT 0,
+    tambah      TINYINT(1) NOT NULL DEFAULT 0,
+    ubah        TINYINT(1) NOT NULL DEFAULT 0,
+    hapus       TINYINT(1) NOT NULL DEFAULT 0,
+    PRIMARY KEY (role, kunci_menu)
 ) ENGINE=InnoDB;
 
 -- Batas stok minimal per kombinasi komponen + golongan + rhesus (BR-09)
@@ -253,10 +267,37 @@ INSERT INTO pengaturan (kunci, nilai, keterangan) VALUES
 -- Ruangan IGD dibutuhkan oleh akun contoh "igd"
 INSERT INTO ruangan (nama_ruangan) VALUES ('IGD');
 
+-- Hak akses bawaan (bisa diubah Admin di menu Hak Akses).
+-- Kolom: role, menu, lihat, tambah, ubah, hapus
+INSERT INTO hak_akses (role, kunci_menu, lihat, tambah, ubah, hapus) VALUES
+('ADMIN',   'ruangan',      1, 1, 1, 1),
+('ADMIN',   'dokter',       1, 1, 1, 1),
+('ADMIN',   'pasien',       1, 1, 1, 1),
+('ADMIN',   'komponen',     1, 1, 1, 1),
+('ADMIN',   'udd',          1, 1, 1, 1),
+('ADMIN',   'stok_minimal', 1, 0, 1, 0),
+('ADMIN',   'pengguna',     1, 1, 1, 1),
+('ADMIN',   'hak_akses',    1, 0, 1, 0),
+('ADMIN',   'log',          1, 0, 0, 0),
+('PETUGAS', 'penerimaan',   1, 1, 0, 0),
+('PETUGAS', 'stok',         1, 0, 0, 0),
+('PETUGAS', 'permintaan',   1, 0, 1, 1),
+('PETUGAS', 'transfusi',    1, 1, 0, 0),
+('PETUGAS', 'keluar',       1, 1, 0, 0),
+('PETUGAS', 'rekomendasi',  1, 0, 0, 0),
+('PETUGAS', 'laporan',      1, 0, 0, 0),
+('KEPALA',  'stok',         1, 0, 0, 0),
+('KEPALA',  'rekomendasi',  1, 0, 0, 0),
+('KEPALA',  'laporan',      1, 0, 0, 0),
+('DOKTER',  'permintaan',   1, 0, 0, 0),
+('DOKTER',  'transfusi',    1, 0, 0, 0),
+('PERAWAT', 'permintaan',   1, 1, 0, 1),
+('PERAWAT', 'transfusi',    1, 0, 1, 0);
+
 -- Akun contoh (HANYA untuk demo lokal). Password asli tercantum di README bag. 10.
 -- Hash dibuat dengan password_hash() PHP 8.2.
 INSERT INTO pengguna (nama, username, password_hash, role, id_ruangan) VALUES
 ('Administrator',      'admin',   '$2y$10$tqxA77hFBgd42QYckLOCTeIXDHrkCI/jfw2KK1./t4AUv.OJqQD0K', 'ADMIN',   NULL),
 ('Petugas BDRS',       'petugas', '$2y$10$Plqxib7sqIfqCTtA4j1XTuj16Jh0WeQ/RvOSbUosLbQqxIzppMRau', 'PETUGAS', NULL),
-('Perawat IGD',        'igd',     '$2y$10$JZuSaDYuZETkBfcDHp4Rd.IebMgNEroKe35sKPwH6hZlZU6lvs3AG', 'RUANGAN', 1),
+('Ns. Rina Marlina',   'igd',     '$2y$10$JZuSaDYuZETkBfcDHp4Rd.IebMgNEroKe35sKPwH6hZlZU6lvs3AG', 'PERAWAT', 1),
 ('Kepala BDRS',        'kepala',  '$2y$10$sp4WKPiqbV3k85/JvPwtGOF.MPHHZzNZRjnej0oF0Th4.T8rSe0OO', 'KEPALA',  NULL);

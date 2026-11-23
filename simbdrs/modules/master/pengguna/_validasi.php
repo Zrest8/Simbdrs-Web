@@ -3,7 +3,9 @@
 // Validasi & aturan bersama untuk tambah.php dan edit.php.
 // =====================================================================
 
-const PERAN_VALID = ['ADMIN', 'PETUGAS', 'RUANGAN', 'KEPALA'];
+// Peran yang bisa dipilih di menu Pengguna. DOKTER tidak ada di sini:
+// akun dokter dibuat & dikelola lewat menu Master Dokter (satu dokter = satu akun).
+const PERAN_VALID = ['ADMIN', 'PETUGAS', 'KEPALA', 'PERAWAT'];
 const PANJANG_PASSWORD_MIN = 8;
 
 function baca_form_pengguna(): array
@@ -23,7 +25,7 @@ function baca_form_pengguna(): array
  * Mengembalikan pesan error ('' jika valid). Pengecekan yang butuh database
  * (ruangan aktif, username kembar, sisa admin) dilakukan di tambah/edit.
  */
-function validasi_pengguna(array $p, bool $wajib_password): string
+function validasi_pengguna(array $p, bool $wajib_password, array $peran_valid = PERAN_VALID): string
 {
     if ($p['nama'] === '' || $p['username'] === '' || $p['role'] === '') {
         return 'Nama, username, dan peran wajib diisi.';
@@ -34,11 +36,11 @@ function validasi_pengguna(array $p, bool $wajib_password): string
     if (!preg_match('/^[a-z0-9_.]{3,50}$/', $p['username'])) {
         return 'Username 3–50 karakter, hanya huruf kecil, angka, titik, dan garis bawah.';
     }
-    if (!in_array($p['role'], PERAN_VALID, true)) {
+    if (!in_array($p['role'], $peran_valid, true)) {
         return 'Peran tidak valid.';
     }
-    if ($p['role'] === 'RUANGAN' && $p['id_ruangan'] <= 0) {
-        return 'Akun dengan peran Ruangan wajib dipilihkan ruangannya.';
+    if ($p['role'] === 'PERAWAT' && $p['id_ruangan'] <= 0) {
+        return 'Akun perawat wajib dipilihkan ruangannya.';
     }
 
     if ($wajib_password || $p['password'] !== '') {

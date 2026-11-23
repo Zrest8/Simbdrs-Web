@@ -3,14 +3,17 @@
 // Permintaan Darah — DAFTAR (F-05)
 // Tabel: permintaan_darah (SELECT), pasien, ruangan, komponen_darah (JOIN),
 //        kantong_darah (hitung kantong terpenuhi)
-// BR-11: pengguna RUANGAN hanya melihat permintaan ruangannya.
+// BR-11: perawat hanya melihat permintaan ruangannya; dokter hanya pasien yang ia tangani.
 // Urutan: aktif dulu → CITO dulu → MENUNGGU → DIPROSES → TERPENUHI_SEBAGIAN
 //         → paling lama menunggu dulu (supaya permintaan baru tidak tenggelam).
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
 require __DIR__ . '/_fungsi.php';
-$saya = wajib_login(['PETUGAS', 'RUANGAN']);
+$saya = wajib_hak('permintaan');
+$boleh_buat   = hak('permintaan', 'tambah');
+$boleh_proses = hak('permintaan', 'ubah');
+$kolom_ruang  = $saya['role'] !== 'PERAWAT';   // perawat cukup tahu ruangannya sendiri
 
 $judul = 'Permintaan Darah';
 $menu_aktif = 'permintaan';
@@ -20,9 +23,10 @@ $cari = trim($_GET['cari'] ?? '');
 
 $where = [];
 $param = [];
-if ($saya['role'] === 'RUANGAN') {
-    $where[] = 'p.id_ruangan = ?';
-    $param[] = (int) $saya['id_ruangan'];
+[$batas, $param_batas] = batas_data($saya);
+if ($batas !== '') {
+    $where[] = $batas;
+    $param = array_merge($param, $param_batas);
 }
 if ($tab === 'aktif') {
     $where[] = "p.status IN ('MENUNGGU','DIPROSES','TERPENUHI_SEBAGIAN')";
@@ -58,20 +62,21 @@ require __DIR__ . '/../../includes/header.php';
 ?>
 
 <section class="panel h-auto">
-    <div class="panel-head flex-wrap">
+    <div class="panel-head flex-wrap border-0 pb-1">
         <i class="bi bi-clipboard2-pulse"></i>
-        <h2><?= $saya['role'] === 'RUANGAN' ? 'Permintaan Ruangan ' . e($saya['nama_ruangan'] ?? '') : 'Permintaan Darah dari Ruangan' ?></h2>
+        <h2><?= $saya['role'] === 'PERAWAT' ? 'Permintaan Ruangan ' . e($saya['nama_ruangan'] ?? '')
+               : ($saya['role'] === 'DOKTER' ? 'Permintaan Pasien Saya' : 'Permintaan Darah dari Ruangan') ?></h2>
         <form class="d-flex gap-2 ms-auto" method="get" role="search">
             <input type="hidden" name="tab" value="<?= e($tab) ?>">
             <input class="form-control form-control-sm" name="cari" value="<?= e($cari) ?>" placeholder="No. permintaan / pasien / RM..." aria-label="Cari permintaan">
             <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
         </form>
-        <?php if ($saya['role'] === 'RUANGAN'): ?>
+        <?php if ($boleh_buat): ?>
             <a class="btn btn-sm btn-primary" href="tambah.php"><i class="bi bi-plus-lg"></i> Buat Permintaan</a>
         <?php endif; ?>
     </div>
 
-    <div class="panel-body pb-0">
+    <div class="panel-tabs">
         <ul class="nav nav-tabs">
             <?php foreach (['aktif' => 'Sedang berjalan', 'selesai' => 'Selesai / batal', 'semua' => 'Semua'] as $k => $label): ?>
                 <li class="nav-item"><a class="nav-link <?= $tab === $k ? 'active' : '' ?>" href="?tab=<?= $k ?><?= $cari !== '' ? '&cari=' . urlencode($cari) : '' ?>"><?= $label ?></a></li>
@@ -85,23 +90,30 @@ require __DIR__ . '/../../includes/header.php';
     <?php else: ?>
     <div class="table-responsive">
         <table class="table table-hover align-middle">
-            <thead><tr><th>No. Permintaan</th><th>Pasien</th><th>Darah</th><th>Terpenuhi</th>
-                <?php if ($saya['role'] === 'PETUGAS'): ?><th>Ruangan</th><?php endif; ?>
-                <th>Waktu</th><th>Status</th><th class="text-end">Aksi</th></tr></thead>
+            <thead><tr><th>No. Permintaan</th><th>Pasien</th><th>Darah</th><th class="d-none d-md-table-cell">Terpenuhi</th>
+                <?php if ($kolom_ruang): ?><th class="d-none d-lg-table-cell">Ruangan</th><?php endif; ?>
+                <th>Status</th><th class="text-end"><span class="visually-hidden">Aksi</span></th></tr></thead>
             <tbody>
-            <?php foreach ($daftar as $p): ?>
+            <?php foreach ($daftar as $p):
+                $bisa_proses = $boleh_proses && in_array($p['status'], STATUS_PERMINTAAN_AKTIF, true);
+                $persen = $p['jumlah_kantong'] > 0 ? min(100, round($p['terpenuhi'] / $p['jumlah_kantong'] * 100)) : 0; ?>
                 <tr>
-                    <td class="text-nowrap"><code><?= e($p['no_permintaan']) ?></code>
-                        <?php if ($p['urgensi'] === 'CITO'): ?><span class="badge badge-cito ms-1">CITO</span><?php endif; ?></td>
-                    <td><?= e($p['nama_pasien']) ?><small class="d-block text-secondary"><?= e($p['no_rm']) ?></small></td>
+                    <td class="text-nowrap"><a href="detail.php?id=<?= (int) $p['id_permintaan'] ?>"><code><?= e($p['no_permintaan']) ?></code></a>
+                        <?php if ($p['urgensi'] === 'CITO'): ?><span class="badge badge-cito ms-1">CITO</span><?php endif; ?>
+                        <small class="d-block text-muted"><?= e(tgl_indo($p['tgl_permintaan'], true)) ?></small></td>
+                    <td class="text-nowrap"><?= e($p['nama_pasien']) ?><small class="d-block text-muted"><?= e($p['no_rm']) ?></small></td>
                     <td class="text-nowrap"><span class="fw-semibold"><?= e($p['kode']) ?> <?= e($p['gol_darah'] . $p['rhesus']) ?></span></td>
-                    <td class="text-nowrap"><?= (int) $p['terpenuhi'] ?> / <?= (int) $p['jumlah_kantong'] ?> ktg</td>
-                    <?php if ($saya['role'] === 'PETUGAS'): ?><td><?= e($p['nama_ruangan']) ?></td><?php endif; ?>
-                    <td class="text-nowrap"><small><?= e(tgl_indo($p['tgl_permintaan'], true)) ?></small></td>
-                    <td><?= badge_status_permintaan($p['status']) ?></td>
+                    <td class="text-nowrap d-none d-md-table-cell">
+                        <div class="progres-mini" title="<?= (int) $p['terpenuhi'] ?> dari <?= (int) $p['jumlah_kantong'] ?> kantong terpenuhi">
+                            <div class="progres-mini-bar"><span style="width: <?= $persen ?>%"></span></div>
+                            <small><?= (int) $p['terpenuhi'] ?>/<?= (int) $p['jumlah_kantong'] ?> ktg</small>
+                        </div>
+                    </td>
+                    <?php if ($kolom_ruang): ?><td class="text-nowrap d-none d-lg-table-cell"><?= e($p['nama_ruangan']) ?></td><?php endif; ?>
+                    <td class="text-nowrap"><?= badge_status_permintaan($p['status']) ?></td>
                     <td class="text-end">
-                        <a class="btn btn-sm <?= $saya['role'] === 'PETUGAS' && in_array($p['status'], STATUS_PERMINTAAN_AKTIF, true) ? 'btn-primary' : 'btn-outline-secondary' ?>" href="detail.php?id=<?= (int) $p['id_permintaan'] ?>">
-                            <?= $saya['role'] === 'PETUGAS' && in_array($p['status'], STATUS_PERMINTAAN_AKTIF, true) ? '<i class="bi bi-gear"></i> Proses' : '<i class="bi bi-eye"></i> Detail' ?></a>
+                        <a class="btn btn-sm <?= $bisa_proses ? 'btn-outline-primary' : 'btn-outline-secondary' ?>" href="detail.php?id=<?= (int) $p['id_permintaan'] ?>">
+                            <?= $bisa_proses ? 'Proses <i class="bi bi-arrow-right"></i>' : 'Detail' ?></a>
                     </td>
                 </tr>
             <?php endforeach; ?>

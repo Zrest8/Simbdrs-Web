@@ -1,6 +1,6 @@
 # Penjelasan Tabel Database SIMBDRS
 
-> Dokumen ini menjelaskan **16 tabel** di database `simbdrs` satu per satu: apa isinya, apa arti setiap kolom, aturan apa yang dijaga, dan tabel itu terhubung ke tabel mana saja.
+> Dokumen ini menjelaskan **17 tabel** di database `simbdrs` satu per satu: apa isinya, apa arti setiap kolom, aturan apa yang dijaga, dan tabel itu terhubung ke tabel mana saja.
 >
 > Sumber: `simbdrs/database/simbdrs.sql`. Semua contoh data di dokumen ini **fiktif** (UU 27/2022 tentang Pelindungan Data Pribadi).
 >
@@ -11,11 +11,11 @@
 
 **Isi**
 1. Istilah yang perlu dipahami dulu
-2. Peta 16 tabel
+2. Peta 17 tabel
 3. Tabel master (8 tabel)
 4. Tabel transaksi (7 tabel)
 5. Tabel tata kelola (1 tabel)
-6. Daftar 24 foreign key
+6. Daftar 25 foreign key
 7. Contoh: menelusuri satu kantong dengan JOIN
 8. Ringkasan untuk presentasi
 
@@ -60,12 +60,12 @@
 
 ---
 
-## 2. Peta 16 tabel
+## 2. Peta 17 tabel
 
 | No | Tabel | Kelompok | Satu baris = … |
 |---|---|---|---|
 | 1 | `ruangan` | Master | satu ruangan RS |
-| 2 | `dokter` | Master | satu dokter |
+| 2 | `dokter` | Master | satu dokter (selalu terhubung ke satu akun di `pengguna`) |
 | 3 | `udd_asal` | Master | satu UDD/UTD PMI pengirim darah |
 | 4 | `komponen_darah` | Master | satu jenis komponen (WB/PRC/TC/FFP) |
 | 5 | `pasien` | Master | satu pasien |
@@ -80,6 +80,7 @@
 | 14 | `pengembalian` | Transaksi | satu kantong yang dikembalikan ke UDD |
 | 15 | `pemusnahan` | Transaksi | satu kantong yang dimusnahkan |
 | 16 | `log_aktivitas` | Tata kelola | satu tindakan pengguna |
+| 17 | `hak_akses` | Tata kelola | hak satu peran di satu menu (lihat/tambah/ubah/hapus) |
 
 **Urutan pembuatan di `simbdrs.sql` mengikuti ketergantungan.** Tabel yang dirujuk harus dibuat lebih dulu daripada tabel yang merujuk. Contohnya, `permintaan_darah` dibuat **sebelum** `kantong_darah`, karena `kantong_darah` punya FK `id_permintaan_dipesan` yang menunjuk ke permintaan.
 
@@ -104,17 +105,18 @@ Tabel master adalah "kamus" yang dipakai berulang-ulang oleh tabel transaksi. Is
 - **Contoh:** `(1, 'IGD', 1)`.
 
 ### 3.2 `dokter`
-**Fungsi:** dokter penanggung jawab setiap permintaan darah (BR-14).
+**Fungsi:** dokter penanggung jawab setiap permintaan darah (BR-14). **Setiap dokter wajib punya akun login.**
 
 | Kolom | Tipe | Keterangan |
 |---|---|---|
 | `id_dokter` | INT, PK | Nomor identitas dokter |
-| `nama_dokter` | VARCHAR(100), NOT NULL | Nama dokter (fiktif) |
+| `id_pengguna` | INT, NOT NULL, **UNIQUE**, **FK → pengguna** | Akun login dokter (role `DOKTER`) |
 | `spesialis` | VARCHAR(100), NULL | Boleh kosong, misalnya untuk dokter umum |
-| `aktif` | TINYINT(1), DEFAULT 1 | Soft delete |
 
+- **Kenapa tidak ada kolom nama & aktif?** Nama dan status aktif dokter sudah ada di akunnya (`pengguna.nama`, `pengguna.aktif`). Menyimpannya dua kali bisa membuat data tidak sama (rancu), jadi cukup sekali (normalisasi).
+- **Kenapa `id_pengguna` NOT NULL + UNIQUE?** NOT NULL = dokter tanpa akun ditolak database. UNIQUE = satu akun hanya untuk satu dokter. Jadi relasinya **1:1**.
 - **Dirujuk oleh:** `permintaan_darah.id_dokter`.
-- **Modul:** `modules/master/dokter`.
+- **Modul:** `modules/master/dokter`. Menambah dokter = membuat akun + data dokter dalam satu transaksi.
 
 ### 3.3 `udd_asal`
 **Fungsi:** UDD/UTD PMI yang mengirim darah ke rumah sakit.
@@ -184,15 +186,33 @@ Tabel master adalah "kamus" yang dipakai berulang-ulang oleh tabel transaksi. Is
 | `nama` | VARCHAR(100) | Nama tampilan |
 | `username` | VARCHAR(50), **UNIQUE** | Nama login |
 | `password_hash` | VARCHAR(255) | Hasil `password_hash()`. **Password asli tidak pernah disimpan** |
-| `role` | ENUM('ADMIN','PETUGAS','RUANGAN','KEPALA') | Peran yang menentukan menu dan hak akses |
-| `id_ruangan` | INT, NULL, **FK → ruangan** | Wajib kalau role = RUANGAN (dicek di PHP) |
+| `role` | ENUM('ADMIN','PETUGAS','KEPALA','DOKTER','PERAWAT') | Peran; hak tiap peran diatur di tabel `hak_akses` |
+| `id_ruangan` | INT, NULL, **FK → ruangan** | Wajib kalau role = PERAWAT (dicek di PHP) |
 | `aktif` | TINYINT(1) | Akun nonaktif tidak bisa login |
 | `created_at` | DATETIME, DEFAULT sekarang | Kapan akun dibuat |
 
-- **Kenapa `id_ruangan` boleh NULL?** Admin, petugas BDRS, dan kepala tidak terikat ke satu ruangan.
+- **Kenapa `id_ruangan` boleh NULL?** Admin, petugas BDRS, kepala, dan dokter tidak terikat ke satu ruangan.
 - **Kenapa password di-hash?** Kalau database bocor, password asli tetap tidak terbaca. Saat login, `password_verify()` mencocokkan isian dengan hash-nya.
 - **Dirujuk oleh:** 7 FK dari tabel lain (petugas, peminta, pencatat, log). Lihat bagian 6.
-- **Modul:** `modules/master/pengguna`. Admin tidak bisa menghapus akunnya sendiri, dan admin aktif terakhir dilindungi.
+- **Modul:** `modules/master/pengguna`. Admin tidak bisa menghapus akunnya sendiri, dan admin aktif terakhir dilindungi. Akun dokter dikelola lewat Master Dokter.
+
+### 3.6b `hak_akses`
+**Fungsi:** menyimpan menu dan aksi apa saja yang boleh dipakai setiap peran, supaya Admin bisa mengubahnya dari menu **Hak Akses** tanpa mengubah kode.
+
+| Kolom | Tipe | Keterangan |
+|---|---|---|
+| `role` | ENUM (sama dengan `pengguna.role`), **PK** | Peran |
+| `kunci_menu` | VARCHAR(30), **PK** | Kunci menu di `includes/menu.php`, misalnya `permintaan` |
+| `lihat` | TINYINT(1) | 1 = menu tampil di sidebar dan halamannya bisa dibuka |
+| `tambah` | TINYINT(1) | 1 = boleh menambah (misalnya membuat permintaan) |
+| `ubah` | TINYINT(1) | 1 = boleh mengubah/memproses (misalnya uji silang, catat transfusi) |
+| `hapus` | TINYINT(1) | 1 = boleh menghapus/membatalkan |
+
+- **PK gabungan `(role, kunci_menu)`:** satu peran hanya punya satu baris untuk satu menu.
+- **Tidak punya FK** karena daftar menu ada di kode (`includes/menu.php`), bukan di tabel.
+- **Cara kerja:** setiap halaman memanggil `wajib_hak('permintaan', 'tambah')`. Fungsi itu membaca tabel ini; kalau nilainya 0, halaman menampilkan "Akses ditolak".
+- **Pengaman:** hak Admin atas menu Pengguna & Hak Akses dikunci di kode agar Admin tidak mengunci dirinya sendiri.
+- **Modul:** `modules/master/hak_akses`.
 
 ### 3.7 `stok_minimal`
 **Fungsi:** batas stok paling sedikit untuk setiap kombinasi komponen + golongan + rhesus (BR-09).
@@ -413,7 +433,7 @@ TERSEDIA → DIPESAN → DIKELUARKAN → DITRANSFUSIKAN
 
 ---
 
-## 6. Daftar 24 foreign key
+## 6. Daftar 25 foreign key
 
 | No | Tabel (anak) | Kolom | → Tabel (induk) | Arti relasi |
 |---|---|---|---|---|
@@ -441,9 +461,10 @@ TERSEDIA → DIPESAN → DIKELUARKAN → DITRANSFUSIKAN
 | 22 | pemusnahan | id_kantong | kantong_darah | kantong dimusnahkan |
 | 23 | pemusnahan | id_petugas | pengguna | petugas |
 | 24 | log_aktivitas | id_pengguna | pengguna | pelaku |
+| 25 | dokter | id_pengguna | pengguna | akun login dokter (1:1, UNIQUE) |
 
 **Pengamatan:**
-- `pengguna` paling sering dirujuk (**7 kali**), karena hampir setiap kejadian dicatat "siapa yang melakukan".
+- `pengguna` paling sering dirujuk (**8 kali**, termasuk akun dokter), karena hampir setiap kejadian dicatat "siapa yang melakukan".
 - `permintaan_darah` dirujuk **3 kali** dan merujuk ke **5 tabel**. Ini tabel yang paling "sibuk" relasinya.
 - `kantong_darah` dirujuk **4 kali**: uji silang, transfusi, pengembalian, pemusnahan.
 - **Efek FK saat menghapus:** kalau ruangan yang sudah punya permintaan coba dihapus, MySQL menolak (error 23000). Karena itu modul master memakai **soft delete** (`aktif = 0`) sebagai gantinya.
@@ -477,7 +498,7 @@ WHERE k.no_kantong = 'SKM26-04118';   -- contoh nomor fiktif
 
 ## 8. Ringkasan untuk presentasi
 
-> Database SIMBDRS terdiri dari **16 tabel**: 8 tabel master, 7 tabel transaksi, dan 1 tabel log, dihubungkan oleh **24 foreign key**.
+> Database SIMBDRS terdiri dari **17 tabel**: 8 tabel master, 7 tabel transaksi, 1 tabel log, dan 1 tabel hak akses, dihubungkan oleh **25 foreign key**.
 >
 > **Tabel intinya `kantong_darah`.** Setiap kantong punya siklus hidup **6 status**, dari TERSEDIA sampai DITRANSFUSIKAN, DIKEMBALIKAN, atau DIMUSNAHKAN.
 >

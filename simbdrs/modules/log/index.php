@@ -9,7 +9,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('log');
 
 $judul = 'Log Aktivitas';
 $menu_aktif = 'log';

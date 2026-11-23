@@ -12,7 +12,8 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('stok_minimal', 'lihat');
+$boleh_ubah = hak('stok_minimal', 'ubah');
 
 $judul = 'Stok Minimal';
 $menu_aktif = 'stok_minimal';
@@ -49,6 +50,7 @@ $isian = [];   // nilai form yang ditampilkan ulang bila ada error
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    wajib_hak('stok_minimal', 'ubah');
     cek_csrf();
     $input = $_POST['min'] ?? [];
 
@@ -126,7 +128,7 @@ require __DIR__ . '/../../../includes/header.php';
     <div class="panel-head flex-wrap">
         <i class="bi bi-sliders"></i><h2>Batas Stok Minimal per Golongan Darah</h2>
         <span class="ms-auto small text-secondary">satuan: kantong</span>
-        <a class="btn btn-sm btn-outline-secondary ms-2" href="<?= url('modules/master/stok_minimal/pengaturan.php') ?>"><i class="bi bi-gear"></i> Periode pemesanan</a>
+        <?php if ($boleh_ubah): ?><a class="btn btn-sm btn-outline-secondary ms-2" href="<?= url('modules/master/stok_minimal/pengaturan.php') ?>"><i class="bi bi-gear"></i> Periode pemesanan</a><?php endif; ?>
     </div>
 
     <?php if ($error): ?>
@@ -154,7 +156,7 @@ require __DIR__ . '/../../../includes/header.php';
                 <tbody>
                 <?php foreach ($komponen as $k): $id = $k['id_komponen']; ?>
                     <tr>
-                        <td><span class="badge text-bg-danger"><?= e($k['kode']) ?></span>
+                        <td><span class="kode-komponen"><?= e($k['kode']) ?></span>
                             <div class="small text-secondary text-nowrap"><?= e($k['nama_komponen']) ?></div></td>
                         <?php foreach ($golongan as $g):
                             $v   = $isian[$id][$g['key']] ?? '';
@@ -175,7 +177,7 @@ require __DIR__ . '/../../../includes/header.php';
             </table>
         </div>
         <div class="panel-body border-top d-flex flex-wrap gap-3 align-items-center">
-            <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Simpan semua</button>
+            <?php if ($boleh_ubah): ?><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Simpan semua</button><?php endif; ?>
             <small class="text-secondary">
                 <i class="bi bi-info-circle"></i>
                 Kosongkan sel bila tidak perlu batas. "ada" = kantong TERSEDIA yang belum kedaluwarsa;

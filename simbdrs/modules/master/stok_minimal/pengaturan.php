@@ -9,7 +9,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../../auth/cek_akses.php';
-wajib_login(['ADMIN']);
+wajib_hak('stok_minimal', 'ubah');
 
 $judul = 'Periode Pemesanan';
 $menu_aktif = 'stok_minimal';

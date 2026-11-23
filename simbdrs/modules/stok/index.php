@@ -14,7 +14,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-$saya = wajib_login(['PETUGAS', 'KEPALA']);
+$saya = wajib_hak('stok');
 
 $judul = 'Stok Darah';
 $menu_aktif = 'stok';
@@ -115,7 +115,7 @@ function link_filter(array $f, array $ubah): string
     return '?' . http_build_query($q);
 }
 
-$boleh_lihat_penerimaan = $saya['role'] === 'PETUGAS';
+$boleh_lihat_penerimaan = hak('penerimaan');
 
 require __DIR__ . '/../../includes/header.php';
 ?>
@@ -123,16 +123,17 @@ require __DIR__ . '/../../includes/header.php';
 <div class="row g-3 mb-3">
     <?php
     $kartu = [
-        ['Siap pakai', $ringkas['siap'], 'droplet-fill', link_filter($f, ['status' => 'TERSEDIA', 'kondisi' => '']), ''],
-        ['Hampir kedaluwarsa', $ringkas['hampir'], 'hourglass-split', link_filter($f, ['status' => 'TERSEDIA', 'kondisi' => 'hampir']), 'text-warning'],
-        ['Kedaluwarsa (belum dimusnahkan)', $ringkas['lewat'], 'exclamation-octagon', link_filter($f, ['status' => 'TERSEDIA', 'kondisi' => 'lewat']), 'text-danger'],
-        ['Dipesan (lolos uji silang)', $ringkas['dipesan'], 'bookmark-check', link_filter($f, ['status' => 'DIPESAN', 'kondisi' => '']), ''],
+        ['Siap pakai', $ringkas['siap'], 'droplet-fill', link_filter($f, ['status' => 'TERSEDIA', 'kondisi' => '']), 'merek'],
+        ['Hampir kedaluwarsa', $ringkas['hampir'], 'hourglass-split', link_filter($f, ['status' => 'TERSEDIA', 'kondisi' => 'hampir']), $ringkas['hampir'] ? 'waspada' : 'ok'],
+        ['Kedaluwarsa, belum dimusnahkan', $ringkas['lewat'], 'x-octagon', link_filter($f, ['status' => 'TERSEDIA', 'kondisi' => 'lewat']), $ringkas['lewat'] ? 'bahaya' : 'ok'],
+        ['Dipesan (lolos uji silang)', $ringkas['dipesan'], 'bookmark-check', link_filter($f, ['status' => 'DIPESAN', 'kondisi' => '']), 'info'],
     ];
-    foreach ($kartu as [$label, $angka, $ikon, $link, $kelas]): ?>
+    foreach ($kartu as [$label, $angka, $ikon, $link, $nada]): ?>
         <div class="col-6 col-xl-3">
-            <a class="panel stat text-decoration-none text-reset" href="<?= e($link) ?>">
-                <span class="stat-ikon <?= $kelas ?>"><i class="bi bi-<?= $ikon ?>"></i></span>
-                <span><span class="stat-angka d-block <?= (int) $angka > 0 ? $kelas : '' ?>"><?= (int) $angka ?></span><span class="stat-label"><?= e($label) ?></span></span>
+            <a class="panel stat" href="<?= e($link) ?>">
+                <span class="stat-ikon nada-<?= $nada ?>"><i class="bi bi-<?= $ikon ?>" aria-hidden="true"></i></span>
+                <span class="min-w-0"><span class="stat-angka d-block"><?= (int) $angka ?></span><span class="stat-label d-block"><?= e($label) ?></span></span>
+                <i class="bi bi-chevron-right stat-panah" aria-hidden="true"></i>
             </a>
         </div>
     <?php endforeach; ?>
@@ -149,7 +150,7 @@ require __DIR__ . '/../../includes/header.php';
             <tbody>
             <?php foreach ($komponen as $c): $id = $c['id_komponen']; $total = 0; ?>
                 <tr>
-                    <td class="text-start"><span class="badge text-bg-danger"><?= e($c['kode']) ?></span></td>
+                    <td class="text-start"><span class="kode-komponen"><?= e($c['kode']) ?></span></td>
                     <?php foreach ($golongan as $g):
                         $n = $rekap[$id][$g] ?? 0;
                         $min = $minimal[$id][$g] ?? null;
@@ -157,7 +158,7 @@ require __DIR__ . '/../../includes/header.php';
                         $total += $n;
                     ?>
                         <td class="<?= $kurang ? 'sel-kurang' : '' ?>">
-                            <a class="text-decoration-none <?= $n === 0 ? 'text-secondary' : 'fw-semibold text-reset' ?>"
+                            <a class="text-decoration-none <?= $n === 0 ? 'angka-nol' : 'fw-semibold text-reset' ?>"
                                href="<?= e(link_filter($f, ['komponen' => (int) $id, 'gol' => $g, 'status' => 'TERSEDIA', 'kondisi' => ''])) ?>"><?= $n ?></a>
                             <?php if ($min !== null): ?><small class="d-block <?= $kurang ? 'text-danger' : 'text-secondary' ?>">min <?= $min ?></small><?php endif; ?>
                         </td>

@@ -16,7 +16,7 @@
 // =====================================================================
 
 require __DIR__ . '/../../auth/cek_akses.php';
-$saya = wajib_login(['PETUGAS', 'KEPALA']);
+$saya = wajib_hak('rekomendasi');
 
 $judul = 'Rekomendasi Pemesanan';
 $menu_aktif = 'rekomendasi';

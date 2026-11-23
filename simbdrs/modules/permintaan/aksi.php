@@ -2,11 +2,11 @@
 // =====================================================================
 // Permintaan Darah — AKSI (POST saja)
 //
-//  aksi=uji    (PETUGAS)  catat uji silang; COCOK → kantong TERSEDIA → DIPESAN (BR-07)
+//  aksi=uji    (hak ubah)    catat uji silang; COCOK → kantong TERSEDIA → DIPESAN (BR-07)
 //              Tabel: uji_silang (INSERT), kantong_darah (UPDATE), permintaan_darah (UPDATE status)
-//  aksi=lepas  (PETUGAS)  kantong DIPESAN → TERSEDIA ("batal dipakai")
+//  aksi=lepas  (hak ubah)    kantong DIPESAN → TERSEDIA ("batal dipakai")
 //              Tabel: kantong_darah (UPDATE), permintaan_darah (UPDATE status)
-//  aksi=batal  (PETUGAS, atau RUANGAN pemilik permintaan)
+//  aksi=batal  (hak hapus; perawat/dokter hanya untuk data miliknya)
 //              permintaan → DIBATALKAN, semua kantong DIPESAN-nya → TERSEDIA
 //              Tabel: permintaan_darah (UPDATE), kantong_darah (UPDATE)
 //  Semua aksi: log_aktivitas (INSERT, BR-12) dan berjalan dalam satu transaksi.
@@ -19,7 +19,7 @@
 
 require __DIR__ . '/../../auth/cek_akses.php';
 require __DIR__ . '/_fungsi.php';
-$saya = wajib_login(['PETUGAS', 'RUANGAN']);
+$saya = wajib_login();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect('modules/permintaan/index.php');
@@ -43,8 +43,9 @@ function gagal(PDO $pdo, string $pesan, string $kembali): never
 if (!in_array($aksi, ['uji', 'lepas', 'batal'], true)) {
     gagal($pdo, 'Aksi tidak dikenal.', 'modules/permintaan/index.php');
 }
-if ($aksi !== 'batal' && $saya['role'] !== 'PETUGAS') {
-    gagal($pdo, 'Hanya petugas BDRS yang boleh melakukan aksi ini.', $kembali);
+// uji & lepas = memproses (hak "ubah"); batal = hak "hapus" (diatur di menu Hak Akses)
+if (!hak('permintaan', $aksi === 'batal' ? 'hapus' : 'ubah')) {
+    gagal($pdo, 'Peran Anda tidak memiliki hak untuk aksi ini.', $kembali);
 }
 
 $pdo->beginTransaction();
